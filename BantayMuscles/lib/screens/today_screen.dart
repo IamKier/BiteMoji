@@ -17,18 +17,6 @@ const _mealIcons = {
   MealType.snack: Icons.cookie_outlined,
 };
 
-String formatDateLabel(String key) {
-  final today = toDateKey(DateTime.now());
-  if (key == today) return 'Today';
-  if (key == shiftDateKey(today, -1)) return 'Yesterday';
-  if (key == shiftDateKey(today, 1)) return 'Tomorrow';
-  final p = key.split('-').map(int.parse).toList();
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  final d = DateTime(p[0], p[1], p[2]);
-  return '${days[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
-}
-
 class TodayScreen extends StatelessWidget {
   final void Function(MealType meal) onAddFood;
   const TodayScreen({super.key, required this.onAddFood});
@@ -42,7 +30,10 @@ class TodayScreen extends StatelessWidget {
     final goals = store.goals;
     final grouped = store.groupedForDate(date);
     final entries = store.entriesForDate(date);
-    final isToday = date == toDateKey(DateTime.now());
+    final isToday = date == store.today;
+    // Steps earn back calories, so they raise the day's budget rather than just
+    // being reported in the steps card.
+    final burned = caloriesFromSteps(store.stepsForDate(date), store.profile.weightKg);
 
     return SafeArea(
       bottom: false,
@@ -59,7 +50,7 @@ class TodayScreen extends StatelessWidget {
                   icon: Icon(Icons.chevron_left, color: colors.textSecondary),
                 ),
                 GestureDetector(
-                  onTap: () => store.setSelectedDate(toDateKey(DateTime.now())),
+                  onTap: () => store.setSelectedDate(store.today),
                   child: Text(formatDateLabel(date),
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 ),
@@ -79,7 +70,10 @@ class TodayScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                   child: Column(
                     children: [
-                      CalorieRing(consumed: totals.calories, goal: goals.calories),
+                      CalorieRing(
+                          consumed: totals.calories,
+                          goal: goals.calories,
+                          burned: burned),
                       const SizedBox(height: 24),
                       Row(
                         children: [
@@ -207,8 +201,6 @@ class _StepsCard extends StatelessWidget {
   final String date;
   const _StepsCard({required this.date});
 
-  bool get _isToday => date == toDateKey(DateTime.now());
-
   Future<void> _editManual(BuildContext context, AppStore store, int current) async {
     final controller = TextEditingController(text: current > 0 ? '$current' : '');
     final value = await showDialog<int>(
@@ -247,7 +239,8 @@ class _StepsCard extends StatelessWidget {
     final progress = (steps / goal).clamp(0.0, 1.0);
 
     // Pedometer status only makes sense for today (it counts live).
-    final status = _isToday ? context.watch<PedometerService>().status : null;
+    final status =
+        date == store.today ? context.watch<PedometerService>().status : null;
 
     return AppCard(
       child: Column(

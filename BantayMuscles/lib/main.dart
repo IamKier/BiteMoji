@@ -10,6 +10,7 @@ import 'screens/today_screen.dart';
 import 'store.dart';
 import 'theme.dart';
 import 'update_prompt.dart';
+import 'whats_new.dart';
 
 void main() {
   runApp(
@@ -69,11 +70,16 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _pedometer = PedometerService(context.read<AppStore>());
     _pedometer.start();
-    // Check GitHub for a newer release once the first frame is up; stays silent
-    // unless an update exists.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) checkAndPromptUpdate(context);
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupPrompts());
+  }
+
+  /// After the first frame: show the "What's new" sheet if we just updated, then
+  /// check GitHub for an even newer release (silent unless one exists).
+  Future<void> _runStartupPrompts() async {
+    if (!mounted) return;
+    await maybeShowWhatsNew(context);
+    if (!mounted) return;
+    await checkAndPromptUpdate(context);
   }
 
   @override

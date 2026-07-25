@@ -132,6 +132,32 @@ class Entry {
         carbs: (j['carbs'] as num).toInt(),
         fat: (j['fat'] as num).toInt(),
       );
+
+  /// Lenient parse for persisted data. Returns null for anything that isn't a
+  /// usable entry — not a map, or missing the id/date that identify it — and
+  /// fills sensible defaults for any other field that's absent or the wrong
+  /// type. This keeps one malformed row, or a field a future release renames,
+  /// from taking down the rest of the diary on load.
+  static Entry? tryFromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id'];
+    final date = raw['date'];
+    if (id is! String || date is! String) return null;
+    int asInt(Object? v) => v is num ? v.toInt() : 0;
+    return Entry(
+      id: id,
+      date: date,
+      meal: MealType.values
+          .firstWhere((m) => m.name == raw['meal'], orElse: () => MealType.snack),
+      name: raw['name'] is String ? raw['name'] as String : '',
+      serving: raw['serving'] is String ? raw['serving'] as String : '',
+      servings: raw['servings'] is num ? (raw['servings'] as num).toDouble() : 1,
+      calories: asInt(raw['calories']),
+      protein: asInt(raw['protein']),
+      carbs: asInt(raw['carbs']),
+      fat: asInt(raw['fat']),
+    );
+  }
 }
 
 class Profile {

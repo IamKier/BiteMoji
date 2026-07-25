@@ -20,6 +20,7 @@ class AddScreen extends StatefulWidget {
 
 class _AddScreenState extends State<AddScreen> {
   late MealType _meal = widget.initialMeal;
+  final _searchController = TextEditingController();
   String _query = '';
 
   // Online (Open Food Facts) search state. A short debounce keeps us from
@@ -40,7 +41,14 @@ class _AddScreenState extends State<AddScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _clearQuery() {
+    _searchController.clear();
+    _onQueryChanged('');
+    FocusScope.of(context).unfocus();
   }
 
   void _onQueryChanged(String value) {
@@ -131,7 +139,10 @@ class _AddScreenState extends State<AddScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final results = context.watch<AppStore>().searchCatalog(_query);
+    final store = context.watch<AppStore>();
+    final hasQuery = _query.trim().isNotEmpty;
+    final results = store.searchCatalog(_query);
+    final recents = hasQuery ? const <Food>[] : store.recentFoods();
 
     return SafeArea(
       bottom: false,
@@ -150,10 +161,19 @@ class _AddScreenState extends State<AddScreen> {
                   children: [
                     Expanded(
                       child: TextField(
+                        controller: _searchController,
                         onChanged: _onQueryChanged,
+                        textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
                           hintText: 'Search foods',
                           prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _query.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.close, size: 20),
+                                  tooltip: 'Clear',
+                                  onPressed: _clearQuery,
+                                )
+                              : null,
                           filled: true,
                           fillColor: colors.surface,
                           contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
@@ -164,6 +184,10 @@ class _AddScreenState extends State<AddScreen> {
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(color: colors.border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: colors.accent, width: 1.5),
                           ),
                         ),
                       ),
@@ -245,6 +269,27 @@ class _AddScreenState extends State<AddScreen> {
                     ),
                   ),
                 ),
+                // Recently logged — the fast path back to what you actually eat.
+                if (recents.isNotEmpty) ...[
+                  const _SectionLabel('RECENT'),
+                  for (final f in recents) ...[
+                    _FoodRow(food: f, leading: Icons.history, onTap: () => _pick(f)),
+                    Divider(height: 1, color: colors.border),
+                  ],
+                ],
+                // Catalog matches, ranked. Header carries a live count so it's
+                // clear how much matched.
+                _SectionLabel(hasQuery
+                    ? (results.isEmpty
+                        ? 'CATALOG'
+                        : '${results.length} ${results.length == 1 ? 'MATCH' : 'MATCHES'}')
+                    : 'ALL FOODS'),
+                if (hasQuery && results.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No catalog matches. Try Quick add, or the online results below.',
+                        style: TextStyle(color: colors.textSecondary)),
+                  ),
                 for (final f in results) ...[
                   _FoodRow(food: f, onTap: () => _pick(f)),
                   Divider(height: 1, color: colors.border),
@@ -266,12 +311,32 @@ class _AddScreenState extends State<AddScreen> {
   }
 }
 
+/// Small uppercase section header used to separate Recent / matches / online.
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 4),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: context.colors.textSecondary,
+              letterSpacing: 0.5)),
+    );
+  }
+}
+
 /// A single food row — shared by the local catalog and online results.
 class _FoodRow extends StatelessWidget {
   final Food food;
   final VoidCallback onTap;
   final bool online;
-  const _FoodRow({required this.food, required this.onTap, this.online = false});
+  final IconData? leading;
+  const _FoodRow({required this.food, required this.onTap, this.online = false, this.leading});
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +345,9 @@ class _FoodRow extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: onTap,
+      leading: leading == null
+          ? null
+          : Icon(leading, size: 20, color: colors.textSecondary),
       title: Row(children: [
         Flexible(child: Text(food.name, overflow: TextOverflow.ellipsis)),
         if (label != null) ...[

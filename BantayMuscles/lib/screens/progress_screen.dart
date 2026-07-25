@@ -14,7 +14,7 @@ class ProgressScreen extends StatelessWidget {
     final store = context.watch<AppStore>();
     final colors = context.colors;
     final goal = store.goals.calories;
-    final today = toDateKey(DateTime.now());
+    final today = store.today;
 
     const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     final days = List.generate(7, (i) {

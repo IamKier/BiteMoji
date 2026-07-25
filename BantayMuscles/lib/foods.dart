@@ -15,6 +15,10 @@ const List<Food> kFoods = [
   Food(id: 'chicken-breast', name: 'Chicken breast, grilled', serving: '100g', calories: 165, protein: 31, carbs: 0, fat: 4),
   Food(id: 'chicken-thigh', name: 'Chicken thigh, roasted', serving: '100g', calories: 209, protein: 26, carbs: 0, fat: 11),
   Food(id: 'pork-belly', name: 'Pork belly (liempo), grilled', serving: '100g', calories: 366, protein: 20, carbs: 0, fat: 31),
+  Food(id: 'samgyupsal', name: 'Samgyupsal (grilled pork belly)', serving: '100g', calories: 370, protein: 20, carbs: 2, fat: 31),
+  Food(id: 'chicken-wings-korean', name: 'Korean chicken wings, glazed', serving: '100g', calories: 250, protein: 19, carbs: 10, fat: 15),
+  Food(id: 'kimchi', name: 'Kimchi', serving: '100g', calories: 30, protein: 2, carbs: 6, fat: 0),
+  Food(id: 'cheese-corn', name: 'Cheese corn', serving: '100g', calories: 170, protein: 5, carbs: 20, fat: 8),
   Food(id: 'pork-chop', name: 'Pork chop, lean', serving: '100g', calories: 231, protein: 26, carbs: 0, fat: 14),
   Food(id: 'beef-ground', name: 'Ground beef, 85% lean', serving: '100g', calories: 250, protein: 26, carbs: 0, fat: 15),
   Food(id: 'beef-sirloin', name: 'Beef sirloin, grilled', serving: '100g', calories: 206, protein: 30, carbs: 0, fat: 9),
@@ -59,9 +63,3 @@ const List<Food> kFoods = [
   Food(id: 'pizza', name: 'Pizza, cheese', serving: '1 slice (107g)', calories: 285, protein: 12, carbs: 36, fat: 10),
   Food(id: 'fried-chicken', name: 'Fried chicken, 1 piece', serving: '1 piece (140g)', calories: 380, protein: 28, carbs: 12, fat: 24),
 ];
-
-List<Food> searchFoods(String query) {
-  final q = query.trim().toLowerCase();
-  if (q.isEmpty) return kFoods;
-  return kFoods.where((f) => f.name.toLowerCase().contains(q)).toList();
-}

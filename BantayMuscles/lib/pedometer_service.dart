@@ -4,7 +4,6 @@ import 'package:flutter/widgets.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'models/nutrition.dart';
 import 'store.dart';
 
 enum PedometerStatus { checking, active, denied, unavailable }
@@ -73,7 +72,9 @@ class PedometerService extends ChangeNotifier with WidgetsBindingObserver {
     }
     final delta = total - _lastTotal!;
     _lastTotal = total;
-    if (delta > 0) store.addStepsForDate(toDateKey(DateTime.now()), delta);
+    // Credit the store's current day so steps can't land on a stale date if the
+    // app has been open across midnight.
+    if (delta > 0) store.addStepsForDate(store.today, delta);
   }
 
   @override

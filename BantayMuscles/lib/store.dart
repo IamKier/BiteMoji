@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'foods.dart';
 import 'models/nutrition.dart';
 import 'remote.dart';
+import 'search.dart';
 
 String createId() {
   final t = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
@@ -17,19 +18,27 @@ String createId() {
 
 /// Single source of truth. Mirrors the Expo app's store: profile, diary entries,
 /// steps, the selected day, and the theme preference — all persisted locally.
-class AppStore extends ChangeNotifier {
+class AppStore extends ChangeNotifier with WidgetsBindingObserver {
   Profile _profile = const Profile();
   List<Entry> _entries = [];
   Map<String, int> _steps = {};
   Map<String, double> _weights = {};
   List<Food> _foods = List.of(kFoods);
-  String _selectedDate = toDateKey(DateTime.now());
+  String _today = toDateKey(DateTime.now());
+  late String _selectedDate = _today;
   ThemeMode _themeMode = ThemeMode.system;
   bool _ready = false;
+  Timer? _dayTimer;
 
   Profile get profile => _profile;
   bool get ready => _ready;
   String get selectedDate => _selectedDate;
+
+  /// The day the app currently considers "today". Everything that needs the
+  /// current date reads this rather than calling DateTime.now() itself, so the
+  /// whole UI agrees on when the day flipped.
+  String get today => _today;
+
   ThemeMode get themeMode => _themeMode;
   Macros get goals => macroGoals(_profile);
   List<Entry> get allEntries => List.unmodifiable(_entries);
@@ -47,11 +56,31 @@ class AppStore extends ChangeNotifier {
   /// The food catalog — the remote Supabase list once synced, else the bundled one.
   List<Food> get foods => List.unmodifiable(_foods);
 
-  /// Case-insensitive name search over the catalog. Empty query returns all.
-  List<Food> searchCatalog(String query) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return _foods;
-    return _foods.where((f) => f.name.toLowerCase().contains(q)).toList();
+  /// Ranked, typo-tolerant, accent-folding search over the catalog. An empty
+  /// query returns the whole catalog. See [searchFoods].
+  List<Food> searchCatalog(String query) => searchFoods(_foods, query);
+
+  /// The distinct foods most recently logged, newest first — a shortcut for the
+  /// things a user actually eats. Reconstructed from diary entries at their
+  /// per-serving values, so re-adding one goes through the normal serving flow.
+  List<Food> recentFoods({int limit = 8}) {
+    final seen = <String>{};
+    final out = <Food>[];
+    for (final e in _entries.reversed) {
+      if (!seen.add(e.name.toLowerCase())) continue;
+      final per = e.servings > 0 ? e.servings : 1;
+      out.add(Food(
+        id: 'recent:${e.id}',
+        name: e.name,
+        serving: e.serving,
+        calories: (e.calories / per).round(),
+        protein: (e.protein / per).round(),
+        carbs: (e.carbs / per).round(),
+        fat: (e.fat / per).round(),
+      ));
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   List<Entry> entriesForDate(String date) =>
@@ -77,37 +106,63 @@ class AppStore extends ChangeNotifier {
   static const _kWeights = 'bm.weights.v1';
   static const _kTheme = 'bm.theme.v1';
 
-  Future<void> hydrate() async {
-    final prefs = await SharedPreferences.getInstance();
+  /// Reads one persisted key and hands its raw string to [parse]. Any failure
+  /// is swallowed so the key simply keeps its default and the rest of the load
+  /// carries on — one unreadable key can't abort the others.
+  void _load(SharedPreferences prefs, String key, void Function(String raw) parse) {
+    final raw = prefs.getString(key);
+    if (raw == null) return;
     try {
-      final pr = prefs.getString(_kProfile);
-      if (pr != null) _profile = Profile.fromJson(jsonDecode(pr) as Map<String, dynamic>);
-
-      final en = prefs.getString(_kEntries);
-      if (en != null) {
-        _entries = (jsonDecode(en) as List)
-            .map((j) => Entry.fromJson(j as Map<String, dynamic>))
-            .toList();
-      }
-
-      final st = prefs.getString(_kSteps);
-      if (st != null) {
-        _steps = (jsonDecode(st) as Map).map((k, v) => MapEntry(k as String, (v as num).toInt()));
-      }
-
-      final wt = prefs.getString(_kWeights);
-      if (wt != null) {
-        _weights = (jsonDecode(wt) as Map)
-            .map((k, v) => MapEntry(k as String, (v as num).toDouble()));
-      }
-
-      final th = prefs.getString(_kTheme);
-      if (th != null) {
-        _themeMode = ThemeMode.values.firstWhere((m) => m.name == th, orElse: () => ThemeMode.system);
-      }
+      parse(raw);
     } catch (_) {
-      // Corrupt storage shouldn't brick startup — begin fresh.
+      // Leave this key at its default value.
     }
+  }
+
+  Future<void> hydrate() async {
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleDayRollover();
+
+    final prefs = await SharedPreferences.getInstance();
+
+    // Each key is loaded on its own: if one value fails to parse — a corrupt
+    // write, or a field a future release changes — only that key falls back to
+    // its default. The others are untouched, so a single problem can never wipe
+    // the whole account the way one shared try/catch used to.
+    _load(prefs, _kProfile, (raw) {
+      _profile = Profile.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    });
+
+    _load(prefs, _kEntries, (raw) {
+      // Parse row by row and drop only the unreadable ones, rather than losing
+      // the entire diary to a single bad entry.
+      _entries = [
+        for (final row in jsonDecode(raw) as List)
+          if (Entry.tryFromJson(row) case final Entry e) e,
+      ];
+    });
+
+    _load(prefs, _kSteps, (raw) {
+      final out = <String, int>{};
+      (jsonDecode(raw) as Map).forEach((k, v) {
+        if (k is String && v is num) out[k] = v.toInt();
+      });
+      _steps = out;
+    });
+
+    _load(prefs, _kWeights, (raw) {
+      final out = <String, double>{};
+      (jsonDecode(raw) as Map).forEach((k, v) {
+        if (k is String && v is num) out[k] = v.toDouble();
+      });
+      _weights = out;
+    });
+
+    _load(prefs, _kTheme, (raw) {
+      _themeMode = ThemeMode.values
+          .firstWhere((m) => m.name == raw, orElse: () => ThemeMode.system);
+    });
+
     _ready = true;
     notifyListeners();
 
@@ -130,6 +185,45 @@ class AppStore extends ChangeNotifier {
   }
 
   String get _entriesJson => jsonEncode(_entries.map((e) => e.toJson()).toList());
+
+  // --- Day rollover ---------------------------------------------------------
+
+  /// Fires a refresh just after the next midnight, then re-arms. Without this a
+  /// session left open overnight keeps showing (and logging to) the old day.
+  void _scheduleDayRollover() {
+    _dayTimer?.cancel();
+    final now = DateTime.now();
+    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+    _dayTimer = Timer(
+      nextMidnight.difference(now) + const Duration(seconds: 1),
+      () {
+        refreshToday();
+        _scheduleDayRollover();
+      },
+    );
+  }
+
+  /// Re-reads the wall clock. If the day has turned over, a view that was
+  /// sitting on "today" follows it; a day the user deliberately navigated to is
+  /// left where it is.
+  void refreshToday() {
+    final actual = toDateKey(DateTime.now());
+    if (actual == _today) return;
+    final wasViewingToday = _selectedDate == _today;
+    _today = actual;
+    if (wasViewingToday) _selectedDate = actual;
+    notifyListeners();
+  }
+
+  /// A timer doesn't fire reliably while the app is backgrounded, so the clock
+  /// is re-checked whenever the app comes back to the foreground.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      refreshToday();
+      _scheduleDayRollover();
+    }
+  }
 
   void setSelectedDate(String date) {
     _selectedDate = date;
@@ -195,6 +289,13 @@ class AppStore extends ChangeNotifier {
     _weights = {..._weights}..remove(date);
     notifyListeners();
     _persist(_kWeights, jsonEncode(_weights));
+  }
+
+  @override
+  void dispose() {
+    _dayTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   // --- Backup ---------------------------------------------------------------

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -17,7 +19,8 @@ class BarcodeScannerScreen extends StatefulWidget {
 
 enum _Status { scanning, looking, error }
 
-class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
+class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
+    with WidgetsBindingObserver {
   MobileScannerController? _controller;
 
   // Camera permission is resolved before the camera is created, so the OS
@@ -32,7 +35,29 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _requestCamera();
+  }
+
+  /// MobileScanner only manages the camera lifecycle for a controller it created
+  /// itself — when one is passed in, as here, it skips lifecycle entirely. So the
+  /// camera has to be stopped and restarted here, or the preview comes back dead
+  /// after the app is backgrounded.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        unawaited(controller.start());
+      case AppLifecycleState.inactive:
+        unawaited(controller.stop());
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   Future<void> _requestCamera() async {
@@ -55,6 +80,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     super.dispose();
   }
@@ -148,34 +174,12 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     // Denied — offer a retry, or a jump to Settings if permanently denied.
     if (!_camPermission!.isGranted || _controller == null) {
       final permanentlyDenied = _camPermission!.isPermanentlyDenied;
-      return ColoredBox(
-        color: Colors.black,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.camera_alt_outlined, size: 40, color: Colors.white70),
-                const SizedBox(height: 12),
-                const Text(
-                  'Camera access is needed to scan barcodes.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: colors.accent),
-                  onPressed: permanentlyDenied ? openAppSettings : _requestCamera,
-                  child: Text(
-                    permanentlyDenied ? 'Open settings' : 'Allow camera',
-                    style: const TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+      return _CameraMessage(
+        icon: Icons.camera_alt_outlined,
+        message: 'Camera access is needed to scan barcodes.',
+        actionLabel: permanentlyDenied ? 'Open settings' : 'Allow camera',
+        onAction: permanentlyDenied ? openAppSettings : _requestCamera,
+        accent: colors.accent,
       );
     }
 
@@ -183,7 +187,20 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        MobileScanner(controller: _controller!, onDetect: _onDetect),
+        MobileScanner(
+          controller: _controller!,
+          onDetect: _onDetect,
+          errorBuilder: (context, error, _) => _CameraMessage(
+            icon: Icons.videocam_off_outlined,
+            message: switch (error.errorCode) {
+              MobileScannerErrorCode.permissionDenied =>
+                'Camera access was denied.',
+              MobileScannerErrorCode.unsupported =>
+                'This device can’t run the barcode scanner.',
+              _ => 'The camera couldn’t start. Close this and try again.',
+            },
+          ),
+        ),
         IgnorePointer(
           child: Center(
             child: FractionallySizedBox(
@@ -234,6 +251,63 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Full-bleed black panel explaining why there's no camera preview, with an
+/// optional recovery action. Used for both a denied permission and a camera
+/// that failed to start.
+class _CameraMessage extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final Color? accent;
+
+  const _CameraMessage({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 40, color: Colors.white70),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70),
+              ),
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 16),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: accent ?? context.colors.accent,
+                  ),
+                  onPressed: onAction,
+                  child: Text(
+                    actionLabel!,
+                    style: const TextStyle(
+                        color: Color(0xFF04120A), fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -250,7 +250,7 @@ class _WeightCardState extends State<_WeightCard> {
   void _log(AppStore store) {
     final kg = double.tryParse(_controller.text.trim());
     if (kg == null || kg <= 0) return;
-    store.setWeightForDate(toDateKey(DateTime.now()), kg);
+    store.setWeightForDate(store.today, kg);
     _controller.clear();
     FocusScope.of(context).unfocus();
   }
@@ -460,7 +460,7 @@ class _BackupCard extends StatelessWidget {
   }
 }
 
-class _NumberField extends StatelessWidget {
+class _NumberField extends StatefulWidget {
   final String label;
   final String unit;
   final int value;
@@ -468,20 +468,45 @@ class _NumberField extends StatelessWidget {
   const _NumberField({required this.label, required this.unit, required this.value, required this.onChanged});
 
   @override
+  State<_NumberField> createState() => _NumberFieldState();
+}
+
+class _NumberFieldState extends State<_NumberField> {
+  late final _controller = TextEditingController(text: '${widget.value}');
+
+  /// Follow changes made elsewhere — logging a weight rewrites the profile, and
+  /// this box has to show it. The parse check keeps the field from being
+  /// rewritten (and the caret thrown to the start) while someone is typing in it.
+  @override
+  void didUpdateWidget(_NumberField old) {
+    super.didUpdateWidget(old);
+    if (widget.value != old.value &&
+        int.tryParse(_controller.text) != widget.value) {
+      _controller.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 14, color: colors.textSecondary)),
+        Text(widget.label, style: TextStyle(fontSize: 14, color: colors.textSecondary)),
         const SizedBox(height: 4),
-        TextFormField(
-          initialValue: '$value',
+        TextField(
+          controller: _controller,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           decoration: InputDecoration(
-            suffixText: unit,
+            suffixText: widget.unit,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             enabledBorder: OutlineInputBorder(
@@ -492,7 +517,7 @@ class _NumberField extends StatelessWidget {
           ),
           onChanged: (t) {
             final n = int.tryParse(t);
-            if (n != null && n > 0) onChanged(n);
+            if (n != null && n > 0) widget.onChanged(n);
           },
         ),
       ],
