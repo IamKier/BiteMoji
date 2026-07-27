@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bm_widget_description">Today\'s calories, macros and steps.</string>
+
+    <!-- Light theme (mirrors the app palette). Dark variants in values-night. -->
+    <color name="bm_widget_bg">#FFFFFF</color>
+    <color name="bm_widget_border">#EDEFF3</color>
+    <color name="bm_widget_text">#0A0C0F</color>
+    <color name="bm_widget_subtext">#697586</color>
+    <color name="bm_widget_track">#EAEDF1</color>
+    <color name="bm_widget_accent">#10B981</color>
+</resources>

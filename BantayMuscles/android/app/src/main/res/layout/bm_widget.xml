@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bm_widget_bg"
+    android:padding="12dp">
+
+    <!-- Calories -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false"
+        android:gravity="bottom">
+
+        <TextView
+            android:id="@+id/cal_left"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/bm_widget_accent"
+            android:textSize="30sp"
+            android:textStyle="bold"
+            android:includeFontPadding="false"
+            android:text="0" />
+
+        <TextView
+            android:id="@+id/cal_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginBottom="4dp"
+            android:textColor="@color/bm_widget_subtext"
+            android:textSize="13sp"
+            android:text="kcal left" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/cal_sub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/bm_widget_subtext"
+        android:textSize="12sp"
+        android:text="0 / 0 kcal" />
+
+    <ProgressBar
+        android:id="@+id/cal_bar"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="7dp"
+        android:layout_marginTop="6dp"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@drawable/bm_bar_cal" />
+
+    <!-- Macros (hidden automatically on short widgets) -->
+    <LinearLayout
+        android:id="@+id/macros_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp"
+        android:baselineAligned="false"
+        android:weightSum="3">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:orientation="vertical">
+            <TextView android:id="@+id/p_text" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="@color/bm_widget_subtext" android:textSize="11sp" android:text="P 0/0g" />
+            <ProgressBar android:id="@+id/p_bar" style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent" android:layout_height="5dp" android:layout_marginTop="3dp"
+                android:max="100" android:progress="0" android:progressDrawable="@drawable/bm_bar_protein" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:orientation="vertical">
+            <TextView android:id="@+id/c_text" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="@color/bm_widget_subtext" android:textSize="11sp" android:text="C 0/0g" />
+            <ProgressBar android:id="@+id/c_bar" style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent" android:layout_height="5dp" android:layout_marginTop="3dp"
+                android:max="100" android:progress="0" android:progressDrawable="@drawable/bm_bar_carbs" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView android:id="@+id/f_text" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textColor="@color/bm_widget_subtext" android:textSize="11sp" android:text="F 0/0g" />
+            <ProgressBar android:id="@+id/f_bar" style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="match_parent" android:layout_height="5dp" android:layout_marginTop="3dp"
+                android:max="100" android:progress="0" android:progressDrawable="@drawable/bm_bar_fat" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Steps -->
+    <TextView
+        android:id="@+id/steps_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="@color/bm_widget_subtext"
+        android:textSize="12sp"
+        android:text="0 steps" />
+
+    <!-- Quick add -->
+    <TextView
+        android:id="@+id/add_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bm_pill"
+        android:gravity="center"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp"
+        android:textColor="#04120A"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:text="＋ Add food" />
+</LinearLayout>

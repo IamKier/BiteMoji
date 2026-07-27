@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -15,6 +19,7 @@ import 'sync_service.dart';
 import 'theme.dart';
 import 'update_prompt.dart';
 import 'whats_new.dart';
+import 'widget_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +37,7 @@ Future<void> main() async {
   await store.hydrate(); // local data ready before first frame
   final auth = AuthController();
   final sync = SyncService(store, auth)..start();
+  HomeWidgetUpdater(store); // keeps the Android home-screen widget in sync
 
   runApp(
     MultiProvider(
@@ -88,6 +94,7 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   MealType _addMeal = MealType.breakfast;
   late final PedometerService _pedometer;
+  StreamSubscription<Uri?>? _widgetClicks;
 
   @override
   void initState() {
@@ -95,6 +102,19 @@ class _HomeShellState extends State<HomeShell> {
     _pedometer = PedometerService(context.read<AppStore>());
     _pedometer.start();
     WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupPrompts());
+
+    // The home-screen widget's quick-add tap launches the app with this URI.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      HomeWidget.initiallyLaunchedFromHomeWidget().then(_openFromWidget);
+      _widgetClicks = HomeWidget.widgetClicked.listen(_openFromWidget);
+    }
+  }
+
+  void _openFromWidget(Uri? uri) {
+    if (uri == null || !mounted) return;
+    if (uri.host == 'add' || uri.path.contains('add')) {
+      setState(() => _index = 1); // jump to the Add tab
+    }
   }
 
   /// After the first frame: show the "What's new" sheet if we just updated, then
@@ -108,6 +128,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    _widgetClicks?.cancel();
     _pedometer.dispose();
     super.dispose();
   }

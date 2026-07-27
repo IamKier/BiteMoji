@@ -12,6 +12,14 @@ class ChangelogEntry {
 
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '1.4.0',
+    changes: [
+      'Home-screen widget! Add it from your launcher (long-press home → Widgets → BantayMuscles) to see today\'s calories, macros and steps at a glance.',
+      'The widget resizes — shrink it for just calories, expand it for the full picture.',
+      'Tap the widget to jump straight into logging a food.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.3.0',
     changes: [
       'Accounts (optional) — sign in to back up your data and carry it to a new phone. Turn it on under Profile; the app still works fully offline.',

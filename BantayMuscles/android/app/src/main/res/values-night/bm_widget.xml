@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bm_widget_bg">#15171B</color>
+    <color name="bm_widget_border">#22252B</color>
+    <color name="bm_widget_text">#F4F6FA</color>
+    <color name="bm_widget_subtext">#98A0AD</color>
+    <color name="bm_widget_track">#22252B</color>
+    <color name="bm_widget_accent">#34D399</color>
+</resources>
