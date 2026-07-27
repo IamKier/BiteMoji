@@ -79,7 +79,51 @@ class Food {
         carbs: (carbs * servings).round(),
         fat: (fat * servings).round(),
       );
+
+  Food copyWith({String? id, String? name, String? serving, int? calories, int? protein, int? carbs, int? fat}) =>
+      Food(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        serving: serving ?? this.serving,
+        calories: calories ?? this.calories,
+        protein: protein ?? this.protein,
+        carbs: carbs ?? this.carbs,
+        fat: fat ?? this.fat,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'serving': serving,
+        'calories': calories,
+        'protein': protein,
+        'carbs': carbs,
+        'fat': fat,
+      };
+
+  /// Lenient parse for persisted custom foods: null for anything without a
+  /// usable id/name, defaults for the rest — consistent with [Entry.tryFromJson]
+  /// so one bad saved food can't take down the whole list on load.
+  static Food? tryFromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id'];
+    final name = raw['name'];
+    if (id is! String || name is! String || name.isEmpty) return null;
+    int asInt(Object? v) => v is num ? v.toInt() : 0;
+    return Food(
+      id: id,
+      name: name,
+      serving: raw['serving'] is String ? raw['serving'] as String : '1 serving',
+      calories: asInt(raw['calories']),
+      protein: asInt(raw['protein']),
+      carbs: asInt(raw['carbs']),
+      fat: asInt(raw['fat']),
+    );
+  }
 }
+
+/// True when a food is one the user saved themselves (see AppStore.customFoods).
+bool isCustomFood(Food food) => food.id.startsWith('custom:');
 
 class Entry {
   final String id;

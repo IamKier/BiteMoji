@@ -5,9 +5,11 @@ import 'package:provider/provider.dart';
 
 import '../models/nutrition.dart';
 import '../online_search.dart';
+import '../portion_guide.dart';
 import '../store.dart';
 import '../theme.dart';
 import 'barcode_scanner_screen.dart';
+import 'recipe_builder_screen.dart';
 
 class AddScreen extends StatefulWidget {
   final MealType initialMeal;
@@ -96,11 +98,24 @@ class _AddScreenState extends State<AddScreen> {
     );
     if (values == null || !mounted) return;
     final store = context.read<AppStore>();
+    final name = values.name.isEmpty ? 'Quick add' : values.name;
+    // Keep it for reuse first, so it's in My Foods even if logging is undone.
+    if (values.save) {
+      store.addCustomFood(Food(
+        id: 'custom:${createId()}',
+        name: name,
+        serving: '1 serving',
+        calories: values.calories,
+        protein: values.protein,
+        carbs: values.carbs,
+        fat: values.fat,
+      ));
+    }
     store.addEntry(Entry(
       id: createId(),
       date: store.selectedDate,
       meal: _meal,
-      name: values.name.isEmpty ? 'Quick add' : values.name,
+      name: name,
       serving: '1 serving',
       servings: 1,
       calories: values.calories,
@@ -109,6 +124,35 @@ class _AddScreenState extends State<AddScreen> {
       fat: values.fat,
     ));
     widget.onAdded();
+  }
+
+  /// Opens the recipe builder. It saves the result to My Foods and returns it,
+  /// so we go straight into logging it via the serving sheet.
+  Future<void> _buildRecipe() async {
+    final food = await Navigator.of(context).push<Food>(
+      MaterialPageRoute(builder: (_) => const RecipeBuilderScreen()),
+    );
+    if (food == null || !mounted) return;
+    _pick(food);
+  }
+
+  /// Long-press on a saved food offers to remove it from My Foods. Past diary
+  /// entries are untouched — they carry their own copied values.
+  Future<void> _confirmRemoveCustom(Food food) async {
+    final store = context.read<AppStore>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove from My Foods?'),
+        content: Text('"${food.name}" will no longer appear in your saved foods. '
+            'Meals you already logged with it stay.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (ok == true) store.removeCustomFood(food.id);
   }
 
   void _pick(Food food) async {
@@ -142,6 +186,7 @@ class _AddScreenState extends State<AddScreen> {
     final store = context.watch<AppStore>();
     final hasQuery = _query.trim().isNotEmpty;
     final results = store.searchCatalog(_query);
+    final myFoods = hasQuery ? const <Food>[] : store.customFoods;
     final recents = hasQuery ? const <Food>[] : store.recentFoods();
 
     return SafeArea(
@@ -232,43 +277,32 @@ class _AddScreenState extends State<AddScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
               children: [
-                // Quick add — type a food's numbers in manually.
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: Material(
-                    color: colors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    child: InkWell(
-                      onTap: _quickAdd,
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: colors.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_note, color: colors.accent),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Quick add',
-                                      style: TextStyle(fontWeight: FontWeight.w700)),
-                                  Text('Enter a food manually',
-                                      style: TextStyle(fontSize: 12, color: colors.textSecondary)),
-                                ],
-                              ),
-                            ),
-                            Icon(Icons.chevron_right, color: colors.textSecondary),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                // Ways to add a food that isn't (or can't be) in a database.
+                _ActionRow(
+                  icon: Icons.edit_note,
+                  title: 'Quick add',
+                  subtitle: 'Enter a food manually',
+                  onTap: _quickAdd,
                 ),
+                const SizedBox(height: 8),
+                _ActionRow(
+                  icon: Icons.blender_outlined,
+                  title: 'Build a recipe',
+                  subtitle: 'Combine ingredients into one saved food',
+                  onTap: _buildRecipe,
+                ),
+                // Your saved foods — long-press to remove one.
+                if (myFoods.isNotEmpty) ...[
+                  const _SectionLabel('MY FOODS'),
+                  for (final f in myFoods) ...[
+                    _FoodRow(
+                      food: f,
+                      onTap: () => _pick(f),
+                      onLongPress: () => _confirmRemoveCustom(f),
+                    ),
+                    Divider(height: 1, color: colors.border),
+                  ],
+                ],
                 // Recently logged — the fast path back to what you actually eat.
                 if (recents.isNotEmpty) ...[
                   const _SectionLabel('RECENT'),
@@ -291,7 +325,11 @@ class _AddScreenState extends State<AddScreen> {
                         style: TextStyle(color: colors.textSecondary)),
                   ),
                 for (final f in results) ...[
-                  _FoodRow(food: f, onTap: () => _pick(f)),
+                  _FoodRow(
+                    food: f,
+                    onTap: () => _pick(f),
+                    onLongPress: isCustomFood(f) ? () => _confirmRemoveCustom(f) : null,
+                  ),
                   Divider(height: 1, color: colors.border),
                 ],
                 _OnlineSection(
@@ -306,6 +344,51 @@ class _AddScreenState extends State<AddScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A tappable card row — Quick add / Build a recipe entry points.
+class _ActionRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  const _ActionRow({required this.icon, required this.title, required this.subtitle, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: colors.accent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(subtitle, style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colors.textSecondary),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -334,17 +417,25 @@ class _SectionLabel extends StatelessWidget {
 class _FoodRow extends StatelessWidget {
   final Food food;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool online;
   final IconData? leading;
-  const _FoodRow({required this.food, required this.onTap, this.online = false, this.leading});
+  const _FoodRow({
+    required this.food,
+    required this.onTap,
+    this.onLongPress,
+    this.online = false,
+    this.leading,
+  });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final label = online ? 'online' : null;
+    final label = online ? 'online' : (isCustomFood(food) ? 'saved' : null);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: onTap,
+      onLongPress: onLongPress,
       leading: leading == null
           ? null
           : Icon(leading, size: 20, color: colors.textSecondary),
@@ -596,19 +687,22 @@ class _Pill extends StatelessWidget {
   }
 }
 
-/// What the Quick Add sheet returns: a name plus typed-in macros.
+/// What the Quick Add sheet returns: a name, typed-in macros, and whether to
+/// keep it in My Foods for reuse.
 class _QuickAddValues {
   final String name;
   final int calories;
   final int protein;
   final int carbs;
   final int fat;
+  final bool save;
   const _QuickAddValues({
     required this.name,
     required this.calories,
     required this.protein,
     required this.carbs,
     required this.fat,
+    required this.save,
   });
 }
 
@@ -627,6 +721,7 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
   final _protein = TextEditingController();
   final _carbs = TextEditingController();
   final _fat = TextEditingController();
+  bool _save = false;
   String? _error;
 
   @override
@@ -652,12 +747,18 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
       setState(() => _error = 'Enter how many calories this was.');
       return;
     }
+    // Saving to My Foods needs a name to find it by later.
+    if (_save && _name.text.trim().isEmpty) {
+      setState(() => _error = 'Give it a name to save it to My Foods.');
+      return;
+    }
     Navigator.of(context).pop(_QuickAddValues(
       name: _name.text.trim(),
       calories: kcal,
       protein: _toNumber(_protein.text),
       carbs: _toNumber(_carbs.text),
       fat: _toNumber(_fat.text),
+      save: _save,
     ));
   }
 
@@ -684,7 +785,20 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Quick add', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Quick add', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                ),
+                // Portion helper — for when you're eyeballing the amount.
+                TextButton.icon(
+                  onPressed: () => showPortionGuide(context),
+                  icon: Icon(Icons.straighten, size: 16, color: colors.accent),
+                  label: Text('Portion guide',
+                      style: TextStyle(color: colors.accent, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
             const SizedBox(height: 2),
             Text('Type the numbers off a label or receipt. Only calories are required.',
                 style: TextStyle(fontSize: 13, color: colors.textSecondary)),
@@ -722,7 +836,39 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
                 Text(_error!, style: TextStyle(color: colors.danger, fontSize: 13)),
               ]),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            // Keep it for reuse — the fix for foods with no official database.
+            InkWell(
+              onTap: () => setState(() => _save = !_save),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: _save,
+                      onChanged: (v) => setState(() => _save = v ?? false),
+                      activeColor: colors.accent,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Save to My Foods',
+                              style: TextStyle(fontWeight: FontWeight.w600)),
+                          Text('Reuse it later without retyping.',
+                              style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -732,8 +878,8 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 onPressed: _confirm,
-                child: const Text('Add to diary',
-                    style: TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
+                child: Text(_save ? 'Save & add to diary' : 'Add to diary',
+                    style: const TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
               ),
             ),
           ],

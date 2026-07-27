@@ -12,6 +12,16 @@ class ChangelogEntry {
 
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '1.2.0',
+    changes: [
+      'My Foods — save any food you enter and reuse it with one tap; no more retyping.',
+      'Recipe builder — combine ingredients into one dish, auto-totalled per serving, saved for reuse.',
+      'Portion guide — eyeball amounts by hand size when you have no scale or label.',
+      'Added ~45 common Filipino dishes to the food list — adobo, kare-kare, sinigang, bulalo, silog, pancit, street food, kakanin and more.',
+      'Rebuilt the barcode scanner on a newer camera engine, with a flashlight toggle for low light.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.1.0',
     changes: [
       'Smarter search — finds foods even with typos or accents, matches words in any order, and ranks the closest result first.',

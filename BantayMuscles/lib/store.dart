@@ -24,6 +24,7 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, int> _steps = {};
   Map<String, double> _weights = {};
   List<Food> _foods = List.of(kFoods);
+  List<Food> _customFoods = [];
   String _today = toDateKey(DateTime.now());
   late String _selectedDate = _today;
   ThemeMode _themeMode = ThemeMode.system;
@@ -56,9 +57,34 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
   /// The food catalog — the remote Supabase list once synced, else the bundled one.
   List<Food> get foods => List.unmodifiable(_foods);
 
-  /// Ranked, typo-tolerant, accent-folding search over the catalog. An empty
-  /// query returns the whole catalog. See [searchFoods].
-  List<Food> searchCatalog(String query) => searchFoods(_foods, query);
+  /// The foods the user saved themselves, newest first. Fully searchable and
+  /// persisted locally — the answer for dishes with no official database entry.
+  List<Food> get customFoods => List.unmodifiable(_customFoods);
+
+  /// Ranked, typo-tolerant, accent-folding search. Searches the user's saved
+  /// foods first, then the catalog, so a "My food" outranks a generic match.
+  /// An empty query returns everything. See [searchFoods].
+  List<Food> searchCatalog(String query) =>
+      searchFoods([..._customFoods, ..._foods], query);
+
+  static const _kCustomFoods = 'bm.customfoods.v1';
+
+  /// Saves (or updates, by id) a food the user entered. Prepended so the newest
+  /// is first.
+  void addCustomFood(Food food) {
+    _customFoods = [food, ..._customFoods.where((f) => f.id != food.id)];
+    notifyListeners();
+    _persistCustomFoods();
+  }
+
+  void removeCustomFood(String id) {
+    _customFoods = _customFoods.where((f) => f.id != id).toList();
+    notifyListeners();
+    _persistCustomFoods();
+  }
+
+  void _persistCustomFoods() =>
+      _persist(_kCustomFoods, jsonEncode(_customFoods.map((f) => f.toJson()).toList()));
 
   /// The distinct foods most recently logged, newest first — a shortcut for the
   /// things a user actually eats. Reconstructed from diary entries at their
@@ -139,6 +165,13 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
       _entries = [
         for (final row in jsonDecode(raw) as List)
           if (Entry.tryFromJson(row) case final Entry e) e,
+      ];
+    });
+
+    _load(prefs, _kCustomFoods, (raw) {
+      _customFoods = [
+        for (final row in jsonDecode(raw) as List)
+          if (Food.tryFromJson(row) case final Food f) f,
       ];
     });
 

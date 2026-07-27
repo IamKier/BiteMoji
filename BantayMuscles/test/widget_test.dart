@@ -136,6 +136,49 @@ void main() {
     });
   });
 
+  group('custom foods (My Foods)', () {
+    test('Food round-trips through JSON', () {
+      const f = Food(id: 'custom:x', name: 'Lola adobo', serving: '1 serving', calories: 350, protein: 28, carbs: 8, fat: 22);
+      final back = Food.tryFromJson(f.toJson());
+      expect(back, isNotNull);
+      expect(back!.name, 'Lola adobo');
+      expect(back.calories, 350);
+      expect(isCustomFood(back), isTrue);
+    });
+
+    test('tryFromJson rejects rows without id/name, defaults the rest', () {
+      expect(Food.tryFromJson('nope'), isNull);
+      expect(Food.tryFromJson({'id': 'custom:1'}), isNull); // no name
+      final f = Food.tryFromJson({'id': 'custom:1', 'name': 'X'});
+      expect(f!.calories, 0);
+      expect(f.serving, '1 serving');
+    });
+
+    test('saved foods persist and lead search results', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      final store = AppStore();
+      await store.hydrate();
+
+      store.addCustomFood(const Food(
+          id: 'custom:1', name: 'WingBab unli plate', serving: '1 serving',
+          calories: 900, protein: 45, carbs: 20, fat: 65));
+      expect(store.customFoods.length, 1);
+      // Searchable, and a saved food outranks catalog matches.
+      final hits = store.searchCatalog('wingbab');
+      expect(hits.first.id, 'custom:1');
+      store.dispose();
+
+      // A fresh store reads it back from storage.
+      final store2 = AppStore();
+      await store2.hydrate();
+      expect(store2.customFoods.map((f) => f.name), contains('WingBab unli plate'));
+      store2.removeCustomFood('custom:1');
+      expect(store2.customFoods, isEmpty);
+      store2.dispose();
+    });
+  });
+
   group('AppStore.hydrate resilience', () {
     test('a corrupt entry is skipped; good ones survive', () async {
       TestWidgetsFlutterBinding.ensureInitialized();

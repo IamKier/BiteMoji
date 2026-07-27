@@ -19,8 +19,7 @@ class BarcodeScannerScreen extends StatefulWidget {
 
 enum _Status { scanning, looking, error }
 
-class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
-    with WidgetsBindingObserver {
+class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   MobileScannerController? _controller;
 
   // Camera permission is resolved before the camera is created, so the OS
@@ -35,30 +34,12 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _requestCamera();
   }
 
-  /// MobileScanner only manages the camera lifecycle for a controller it created
-  /// itself — when one is passed in, as here, it skips lifecycle entirely. So the
-  /// camera has to be stopped and restarted here, or the preview comes back dead
-  /// after the app is backgrounded.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
-
-    switch (state) {
-      case AppLifecycleState.resumed:
-        unawaited(controller.start());
-      case AppLifecycleState.inactive:
-        unawaited(controller.stop());
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.detached:
-        break;
-    }
-  }
+  // Camera lifecycle (stop on background, restart on resume) is handled by the
+  // MobileScanner widget itself in v7 via useAppLifecycleState — no manual
+  // observer needed here.
 
   Future<void> _requestCamera() async {
     final status = await Permission.camera.request();
@@ -80,7 +61,6 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     super.dispose();
   }
@@ -131,9 +111,29 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
                 children: [
                   const Text('Scan barcode',
                       style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.close, color: colors.text),
+                  Row(
+                    children: [
+                      // Torch — only meaningful once the camera is live.
+                      if (_controller != null && (_camPermission?.isGranted ?? false))
+                        ValueListenableBuilder<MobileScannerState>(
+                          valueListenable: _controller!,
+                          builder: (context, state, _) {
+                            final on = state.torchState == TorchState.on;
+                            final available = state.torchState != TorchState.unavailable;
+                            if (!available) return const SizedBox.shrink();
+                            return IconButton(
+                              tooltip: on ? 'Turn off flashlight' : 'Turn on flashlight',
+                              onPressed: () => _controller?.toggleTorch(),
+                              icon: Icon(on ? Icons.flash_on : Icons.flash_off,
+                                  color: on ? colors.accent : colors.text),
+                            );
+                          },
+                        ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.close, color: colors.text),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -190,7 +190,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
         MobileScanner(
           controller: _controller!,
           onDetect: _onDetect,
-          errorBuilder: (context, error, _) => _CameraMessage(
+          errorBuilder: (context, error) => _CameraMessage(
             icon: Icons.videocam_off_outlined,
             message: switch (error.errorCode) {
               MobileScannerErrorCode.permissionDenied =>
