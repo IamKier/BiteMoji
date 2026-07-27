@@ -136,8 +136,57 @@ class _AddScreenState extends State<AddScreen> {
     _pick(food);
   }
 
-  /// Long-press on a saved food offers to remove it from My Foods. Past diary
-  /// entries are untouched — they carry their own copied values.
+  /// Long-press on a saved food: edit its numbers or remove it.
+  Future<void> _customFoodMenu(Food food) async {
+    final colors = context.colors;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(food.name,
+                  style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+            ),
+            ListTile(
+              leading: Icon(Icons.edit_outlined, color: colors.text),
+              title: const Text('Edit'),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: colors.danger),
+              title: Text('Remove from My Foods', style: TextStyle(color: colors.danger)),
+              onTap: () => Navigator.pop(ctx, 'remove'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'edit') {
+      _editCustomFood(food);
+    } else if (action == 'remove') {
+      _confirmRemoveCustom(food);
+    }
+  }
+
+  /// Opens a prefilled editor for a saved food; saving upserts it (same id).
+  Future<void> _editCustomFood(Food food) async {
+    final updated = await showModalBottomSheet<Food>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditCustomFoodSheet(food: food),
+    );
+    if (updated == null || !mounted) return;
+    context.read<AppStore>().addCustomFood(updated);
+  }
+
+  /// Removes a saved food from My Foods. Past diary entries are untouched —
+  /// they carry their own copied values.
   Future<void> _confirmRemoveCustom(Food food) async {
     final store = context.read<AppStore>();
     final ok = await showDialog<bool>(
@@ -298,7 +347,7 @@ class _AddScreenState extends State<AddScreen> {
                     _FoodRow(
                       food: f,
                       onTap: () => _pick(f),
-                      onLongPress: () => _confirmRemoveCustom(f),
+                      onLongPress: () => _customFoodMenu(f),
                     ),
                     Divider(height: 1, color: colors.border),
                   ],
@@ -328,7 +377,7 @@ class _AddScreenState extends State<AddScreen> {
                   _FoodRow(
                     food: f,
                     onTap: () => _pick(f),
-                    onLongPress: isCustomFood(f) ? () => _confirmRemoveCustom(f) : null,
+                    onLongPress: isCustomFood(f) ? () => _customFoodMenu(f) : null,
                   ),
                   Divider(height: 1, color: colors.border),
                 ],
@@ -934,6 +983,122 @@ class _NumberField extends StatelessWidget {
           decoration: _fieldDecoration(colors, hint: '0'),
         ),
       ],
+    );
+  }
+}
+
+/// Edits a saved food in place. Pops with the updated [Food] (same id) or null.
+class _EditCustomFoodSheet extends StatefulWidget {
+  final Food food;
+  const _EditCustomFoodSheet({required this.food});
+
+  @override
+  State<_EditCustomFoodSheet> createState() => _EditCustomFoodSheetState();
+}
+
+class _EditCustomFoodSheetState extends State<_EditCustomFoodSheet> {
+  late final _name = TextEditingController(text: widget.food.name);
+  late final _serving = TextEditingController(text: widget.food.serving);
+  late final _calories = TextEditingController(text: '${widget.food.calories}');
+  late final _protein = TextEditingController(text: '${widget.food.protein}');
+  late final _carbs = TextEditingController(text: '${widget.food.carbs}');
+  late final _fat = TextEditingController(text: '${widget.food.fat}');
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _serving.dispose();
+    _calories.dispose();
+    _protein.dispose();
+    _carbs.dispose();
+    _fat.dispose();
+    super.dispose();
+  }
+
+  int _toNumber(String text) {
+    final parsed = double.tryParse(text.replaceAll(RegExp(r'[^0-9.]'), ''));
+    return parsed == null || !parsed.isFinite ? 0 : parsed.round();
+  }
+
+  void _save() {
+    if (_name.text.trim().isEmpty) {
+      setState(() => _error = 'A saved food needs a name.');
+      return;
+    }
+    Navigator.of(context).pop(widget.food.copyWith(
+      name: _name.text.trim(),
+      serving: _serving.text.trim().isEmpty ? '1 serving' : _serving.text.trim(),
+      calories: _toNumber(_calories.text),
+      protein: _toNumber(_protein.text),
+      carbs: _toNumber(_carbs.text),
+      fat: _toNumber(_fat.text),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border.all(color: colors.border),
+      ),
+      padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: colors.track, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('Edit food', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            Text('Name', style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+            const SizedBox(height: 4),
+            TextField(controller: _name, decoration: _fieldDecoration(colors), textInputAction: TextInputAction.next),
+            const SizedBox(height: 12),
+            Text('Serving', style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+            const SizedBox(height: 4),
+            TextField(controller: _serving, decoration: _fieldDecoration(colors, hint: 'e.g. 1 cup, 100g')),
+            const SizedBox(height: 16),
+            _NumberField(controller: _calories, label: 'Calories (kcal)', color: colors.accent),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _NumberField(controller: _protein, label: 'Protein (g)', color: MacroColors.protein)),
+              const SizedBox(width: 8),
+              Expanded(child: _NumberField(controller: _carbs, label: 'Carbs (g)', color: MacroColors.carbs)),
+              const SizedBox(width: 8),
+              Expanded(child: _NumberField(controller: _fat, label: 'Fat (g)', color: MacroColors.fat)),
+            ]),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+            ],
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: _save,
+                child: const Text('Save changes',
+                    style: TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

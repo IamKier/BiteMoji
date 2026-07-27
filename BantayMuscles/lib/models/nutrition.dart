@@ -150,6 +150,45 @@ class Entry {
     required this.fat,
   });
 
+  Entry copyWith({
+    String? id,
+    String? date,
+    MealType? meal,
+    String? name,
+    String? serving,
+    double? servings,
+    int? calories,
+    int? protein,
+    int? carbs,
+    int? fat,
+  }) =>
+      Entry(
+        id: id ?? this.id,
+        date: date ?? this.date,
+        meal: meal ?? this.meal,
+        name: name ?? this.name,
+        serving: serving ?? this.serving,
+        servings: servings ?? this.servings,
+        calories: calories ?? this.calories,
+        protein: protein ?? this.protein,
+        carbs: carbs ?? this.carbs,
+        fat: fat ?? this.fat,
+      );
+
+  /// Returns this entry rescaled to a new number of servings, keeping the
+  /// per-serving values it was logged at.
+  Entry withServings(double newServings) {
+    final base = servings > 0 ? servings : 1;
+    int scale(int total) => (total / base * newServings).round();
+    return copyWith(
+      servings: newServings,
+      calories: scale(calories),
+      protein: scale(protein),
+      carbs: scale(carbs),
+      fat: scale(fat),
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'date': date,

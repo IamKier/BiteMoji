@@ -1,0 +1,38 @@
+name: CI
+
+# Runs static analysis and the test suite on every push/PR to main, so
+# regressions are caught before a release is cut.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # The Flutter app lives in this subdirectory of the repo.
+        working-directory: BantayMuscles
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.7
+          channel: stable
+          cache: true
+
+      # These files are gitignored (they hold local secrets), so a fresh
+      # checkout lacks them and the code won't compile. Seed them from the
+      # committed templates — empty values just mean offline / AI-off.
+      - name: Seed local config from templates
+        run: |
+          cp -n lib/remote_config.example.dart lib/remote_config.dart
+          cp -n lib/ai_config.example.dart lib/ai_config.dart
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test

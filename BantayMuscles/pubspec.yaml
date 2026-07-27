@@ -1,7 +1,7 @@
 name: bantaymuscles
 description: BantayMuscles — calorie and macro tracker (Flutter build).
 publish_to: 'none'
-version: 1.2.0+5
+version: 1.3.0+6
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -13,6 +13,7 @@ dependencies:
   provider: ^6.1.2          # simple state management (ChangeNotifier)
   shared_preferences: ^2.3.2 # local persistence (like AsyncStorage)
   http: ^1.2.2              # Open Food Facts calls
+  supabase_flutter: ^2.8.0  # auth + per-user cloud sync
   fl_chart: ^0.69.0         # progress charts / donut
   mobile_scanner: ^7.0.0    # barcode scanning (camera)
   pedometer: ^4.0.2         # hardware step counting

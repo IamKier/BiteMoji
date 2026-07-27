@@ -12,6 +12,16 @@ class ChangelogEntry {
 
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '1.3.0',
+    changes: [
+      'Accounts (optional) — sign in to back up your data and carry it to a new phone. Turn it on under Profile; the app still works fully offline.',
+      'Weight trend chart on the Progress tab.',
+      'Edit a logged meal (change servings or move it to another meal) — just tap it.',
+      'Edit or remove your saved foods with a long-press.',
+      'More foods sync from the shared online catalog.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.2.0',
     changes: [
       'My Foods — save any food you enter and reuse it with one tap; no more retyping.',

@@ -103,6 +103,8 @@ class ProgressScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          const _WeightTrendCard(),
+          const SizedBox(height: 16),
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,6 +123,156 @@ class ProgressScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Weight over time — a line chart drawn from the logged body weights. Uses the
+/// same hand-painted approach as the rest of the app's charts.
+class _WeightTrendCard extends StatelessWidget {
+  const _WeightTrendCard();
+
+  String _fmtDate(String key) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final p = key.split('-').map(int.parse).toList();
+    return '${months[p[1] - 1]} ${p[2]}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<AppStore>();
+    final colors = context.colors;
+
+    // Oldest → newest, so the line reads left to right.
+    final entries = store.weights.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Weight trend', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              if (entries.length >= 2)
+                Builder(builder: (_) {
+                  final delta = entries.last.value - entries.first.value;
+                  final up = delta > 0;
+                  final flat = delta.abs() < 0.05;
+                  return Text(
+                    flat ? 'no change' : '${up ? '+' : '−'}${delta.abs().toStringAsFixed(1)} kg',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: flat ? colors.textSecondary : (up ? colors.danger : colors.accent),
+                    ),
+                  );
+                }),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (entries.length < 2)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                entries.isEmpty
+                    ? 'Log your weight on the Profile tab to see your trend.'
+                    : 'Log at least one more day to see a trend line.',
+                style: TextStyle(color: colors.textSecondary),
+              ),
+            )
+          else ...[
+            SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _WeightLinePainter(
+                  weights: [for (final e in entries) e.value],
+                  line: colors.accent,
+                  grid: colors.track,
+                  dot: colors.accent,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_fmtDate(entries.first.key),
+                    style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+                Text('${entries.last.value.toStringAsFixed(1)} kg',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: colors.text)),
+                Text(_fmtDate(entries.last.key),
+                    style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WeightLinePainter extends CustomPainter {
+  final List<double> weights;
+  final Color line;
+  final Color grid;
+  final Color dot;
+
+  _WeightLinePainter({required this.weights, required this.line, required this.grid, required this.dot});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (weights.length < 2) return;
+
+    var minW = weights.reduce((a, b) => a < b ? a : b);
+    var maxW = weights.reduce((a, b) => a > b ? a : b);
+    // Pad the range so a flat-ish line isn't glued to an edge.
+    if ((maxW - minW).abs() < 1) {
+      minW -= 1;
+      maxW += 1;
+    }
+    final range = maxW - minW;
+
+    const pad = 8.0;
+    final w = size.width;
+    final h = size.height - pad * 2;
+
+    double xAt(int i) => weights.length == 1 ? w / 2 : w * i / (weights.length - 1);
+    double yAt(double v) => pad + h * (1 - (v - minW) / range);
+
+    // Horizontal guide lines (top / middle / bottom of the range).
+    final gridPaint = Paint()
+      ..color = grid
+      ..strokeWidth = 1;
+    for (final frac in [0.0, 0.5, 1.0]) {
+      final y = pad + h * frac;
+      canvas.drawLine(Offset(0, y), Offset(w, y), gridPaint);
+    }
+
+    // The weight line.
+    final path = Path()..moveTo(xAt(0), yAt(weights[0]));
+    for (var i = 1; i < weights.length; i++) {
+      path.lineTo(xAt(i), yAt(weights[i]));
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = line
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    // Dots at each logged point.
+    final dotPaint = Paint()..color = dot;
+    for (var i = 0; i < weights.length; i++) {
+      canvas.drawCircle(Offset(xAt(i), yAt(weights[i])), 3, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WeightLinePainter old) =>
+      old.weights != weights || old.line != line || old.grid != grid;
 }
 
 class _Stat extends StatelessWidget {

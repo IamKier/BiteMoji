@@ -136,6 +136,42 @@ void main() {
     });
   });
 
+  group('editing a diary entry', () {
+    Entry sample() => const Entry(
+          id: 'e1', date: '2026-07-27', meal: MealType.lunch, name: 'Rice',
+          serving: '1 cup', servings: 1, calories: 200, protein: 4, carbs: 45, fat: 0,
+        );
+
+    test('withServings rescales macros proportionally', () {
+      final e = sample().withServings(2);
+      expect(e.servings, 2);
+      expect(e.calories, 400);
+      expect(e.carbs, 90);
+      final half = sample().withServings(0.5);
+      expect(half.calories, 100);
+    });
+
+    test('copyWith can move an entry to another meal without touching macros', () {
+      final e = sample().copyWith(meal: MealType.dinner);
+      expect(e.meal, MealType.dinner);
+      expect(e.calories, 200);
+    });
+
+    test('updateEntry replaces by id and persists', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({
+        _kEntries: jsonEncode([_entryJson('e1', calories: 200)]),
+      });
+      final store = AppStore();
+      await store.hydrate();
+      final original = store.allEntries.single;
+      store.updateEntry(original.withServings(3));
+      expect(store.allEntries.single.calories, 600);
+      expect(store.allEntries.length, 1);
+      store.dispose();
+    });
+  });
+
   group('custom foods (My Foods)', () {
     test('Food round-trips through JSON', () {
       const f = Food(id: 'custom:x', name: 'Lola adobo', serving: '1 serving', calories: 350, protein: 28, carbs: 8, fat: 22);

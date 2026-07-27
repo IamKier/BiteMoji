@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../auth_controller.dart';
 import '../models/nutrition.dart';
 import '../store.dart';
+import '../sync_service.dart';
 import '../theme.dart';
 import '../update_prompt.dart';
 import '../updater.dart';
@@ -40,6 +42,7 @@ class ProfileScreen extends StatelessWidget {
         children: [
           const Text('Profile', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
+          const _AccountCard(),
           // Target
           AppCard(
             child: Column(
@@ -168,6 +171,232 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Account card: sign in / create account to sync data across devices, or show
+/// the signed-in email + sync status + sign out. Hidden entirely when Supabase
+/// isn't configured (the app then stays fully local).
+class _AccountCard extends StatefulWidget {
+  const _AccountCard();
+
+  @override
+  State<_AccountCard> createState() => _AccountCardState();
+}
+
+class _AccountCardState extends State<_AccountCard> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _busy = false;
+  // Login stays hidden until the user chooses to link an account — the app is
+  // local-only by default.
+  bool _expanded = false;
+  String? _error;
+  String? _notice;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<String?> Function() action) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _notice = null;
+    });
+    final error = await action();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = error;
+    });
+  }
+
+  Future<void> _signIn(AuthController auth) =>
+      _run(() => auth.signIn(_email.text, _password.text));
+
+  Future<void> _signUp(AuthController auth) => _run(() async {
+        final res = await auth.signUp(_email.text, _password.text);
+        if (res.error == null && res.needsConfirmation && mounted) {
+          setState(() => _notice = 'Check your email to confirm, then sign in.');
+        }
+        return res.error;
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthController>();
+    if (!auth.isConfigured) return const SizedBox.shrink();
+
+    final Widget body;
+    if (auth.signedIn) {
+      body = _signedIn(context, auth);
+    } else if (_expanded) {
+      body = _signedOut(context, auth);
+    } else {
+      body = _linkPrompt(context); // opt-in entry point; no login shown yet
+    }
+
+    return Column(
+      children: [
+        AppCard(child: body),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  /// Collapsed, opt-in entry point. Login fields appear only after this is
+  /// tapped, so a user who never wants an account never sees a login form.
+  Widget _linkPrompt(BuildContext context) {
+    final colors = context.colors;
+    return InkWell(
+      onTap: () => setState(() {
+        _expanded = true;
+        _error = null;
+        _notice = null;
+      }),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_outlined, color: colors.accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Sync across devices', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text('Optional — link an account to back up your data.',
+                    style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right, color: colors.textSecondary),
+        ],
+      ),
+    );
+  }
+
+  Widget _signedIn(BuildContext context, AuthController auth) {
+    final colors = context.colors;
+    final sync = context.watch<SyncService>();
+    final (statusText, statusColor) = switch (sync.status) {
+      SyncStatus.syncing => ('Syncing…', colors.textSecondary),
+      SyncStatus.synced => ('Synced', colors.accent),
+      SyncStatus.offline => ('Offline — will sync when back online', colors.textSecondary),
+      SyncStatus.idle => ('Synced to your account', colors.textSecondary),
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(Icons.cloud_done_outlined, color: colors.accent),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+        ]),
+        const SizedBox(height: 4),
+        Text(auth.email ?? 'Signed in', style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+        const SizedBox(height: 2),
+        Row(children: [
+          Icon(Icons.sync, size: 14, color: statusColor),
+          const SizedBox(width: 4),
+          Flexible(child: Text(statusText, style: TextStyle(fontSize: 12, color: statusColor))),
+        ]),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(side: BorderSide(color: colors.border), padding: const EdgeInsets.symmetric(vertical: 12)),
+            icon: Icon(Icons.logout, size: 18, color: colors.text),
+            label: Text('Sign out', style: TextStyle(color: colors.text)),
+            onPressed: _busy ? null : () => auth.signOut(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _signedOut(BuildContext context, AuthController auth) {
+    final colors = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Save your data', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Not now',
+              icon: Icon(Icons.close, size: 20, color: colors.textSecondary),
+              onPressed: _busy ? null : () => setState(() => _expanded = false),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text('Sign in to back up your diary and carry it to a new phone.',
+            style: TextStyle(fontSize: 13, color: colors.textSecondary)),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _email,
+          keyboardType: TextInputType.emailAddress,
+          autocorrect: false,
+          textInputAction: TextInputAction.next,
+          decoration: _authField(colors, hint: 'Email', icon: Icons.mail_outline),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _password,
+          obscureText: true,
+          decoration: _authField(colors, hint: 'Password', icon: Icons.lock_outline),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+        ],
+        if (_notice != null) ...[
+          const SizedBox(height: 8),
+          Text(_notice!, style: TextStyle(color: colors.accent, fontSize: 13)),
+        ],
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.accent,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: _busy ? null : () => _signIn(auth),
+              child: _busy
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Sign in', style: TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(side: BorderSide(color: colors.border), padding: const EdgeInsets.symmetric(vertical: 12)),
+              onPressed: _busy ? null : () => _signUp(auth),
+              child: Text('Create account', style: TextStyle(color: colors.text)),
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
+
+  InputDecoration _authField(AppColors colors, {required String hint, required IconData icon}) => InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, size: 20),
+        isDense: true,
+        filled: true,
+        fillColor: colors.background,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colors.border)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      );
 }
 
 /// App version + a manual "Check for updates" (pulls from GitHub Releases).

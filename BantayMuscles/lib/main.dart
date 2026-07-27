@@ -1,21 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'auth_controller.dart';
 import 'models/nutrition.dart';
 import 'pedometer_service.dart';
+import 'remote_config.dart';
 import 'screens/add_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/progress_screen.dart';
 import 'screens/today_screen.dart';
 import 'store.dart';
+import 'sync_service.dart';
 import 'theme.dart';
 import 'update_prompt.dart';
 import 'whats_new.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Bring up Supabase only when configured; otherwise the app runs fully local.
+  if (kSupabaseUrl.isNotEmpty && kSupabaseAnonKey.isNotEmpty) {
+    try {
+      await Supabase.initialize(url: kSupabaseUrl, publishableKey: kSupabaseAnonKey);
+    } catch (_) {
+      // A failed init shouldn't block startup — the app still works offline.
+    }
+  }
+
+  final store = AppStore();
+  await store.hydrate(); // local data ready before first frame
+  final auth = AuthController();
+  final sync = SyncService(store, auth)..start();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AppStore()..hydrate(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppStore>.value(value: store),
+        ChangeNotifierProvider<AuthController>.value(value: auth),
+        ChangeNotifierProvider<SyncService>.value(value: sync),
+      ],
       child: const BantayMusclesApp(),
     ),
   );

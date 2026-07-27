@@ -149,28 +149,31 @@ class _MealSection extends StatelessWidget {
             ],
           ),
           for (final e in entries)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 14)),
-                        Text(e.servings == 1 ? e.serving : '${_trim(e.servings)} × ${e.serving}',
-                            style: TextStyle(fontSize: 14, color: colors.textSecondary)),
-                      ],
+            InkWell(
+              onTap: () => _editEntry(context, store, e),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14)),
+                          Text(e.servings == 1 ? e.serving : '${_trim(e.servings)} × ${e.serving}',
+                              style: TextStyle(fontSize: 14, color: colors.textSecondary)),
+                        ],
+                      ),
                     ),
-                  ),
-                  Text('${e.calories}',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  IconButton(
-                    onPressed: () => store.removeEntry(e.id),
-                    icon: Icon(Icons.close, size: 18, color: colors.textSecondary),
-                  ),
-                ],
+                    Text('${e.calories}',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                    IconButton(
+                      onPressed: () => store.removeEntry(e.id),
+                      icon: Icon(Icons.close, size: 18, color: colors.textSecondary),
+                    ),
+                  ],
+                ),
               ),
             ),
           Padding(
@@ -193,6 +196,148 @@ class _MealSection extends StatelessWidget {
   }
 
   String _trim(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+}
+
+/// Tapping a logged entry opens this sheet to change its servings (which
+/// rescales the macros) or move it to a different meal.
+Future<void> _editEntry(BuildContext context, AppStore store, Entry entry) async {
+  final result = await showModalBottomSheet<({double servings, MealType meal})>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _EditEntrySheet(entry: entry),
+  );
+  if (result == null) return;
+  store.updateEntry(entry.withServings(result.servings).copyWith(meal: result.meal));
+}
+
+class _EditEntrySheet extends StatefulWidget {
+  final Entry entry;
+  const _EditEntrySheet({required this.entry});
+
+  @override
+  State<_EditEntrySheet> createState() => _EditEntrySheetState();
+}
+
+class _EditEntrySheetState extends State<_EditEntrySheet> {
+  late double _servings = widget.entry.servings > 0 ? widget.entry.servings : 1;
+  late MealType _meal = widget.entry.meal;
+
+  String _trim(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  int get _previewKcal {
+    final base = widget.entry.servings > 0 ? widget.entry.servings : 1;
+    return (widget.entry.calories / base * _servings).round();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border.all(color: colors.border),
+      ),
+      padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: colors.track, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(widget.entry.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          Text('$_previewKcal kcal · ${widget.entry.serving}',
+              style: TextStyle(color: colors.textSecondary)),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _StepButton(icon: Icons.remove, onTap: () => setState(() => _servings = (_servings - 0.5).clamp(0.5, 99))),
+              const SizedBox(width: 24),
+              Column(children: [
+                Text(_trim(_servings), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700)),
+                Text(_servings == 1 ? 'serving' : 'servings', style: TextStyle(color: colors.textSecondary)),
+              ]),
+              const SizedBox(width: 24),
+              _StepButton(icon: Icons.add, onTap: () => setState(() => _servings = (_servings + 0.5).clamp(0.5, 99))),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              for (final m in MealType.values)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: InkWell(
+                      onTap: () => setState(() => _meal = m),
+                      borderRadius: BorderRadius.circular(999),
+                      child: Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: m == _meal ? colors.accentMuted : colors.surface,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: m == _meal ? colors.accent : colors.border),
+                        ),
+                        child: Text(m.label,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: m == _meal ? colors.accent : colors.textSecondary)),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.accent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: () => Navigator.of(context).pop((servings: _servings, meal: _meal)),
+              child: const Text('Save changes',
+                  style: TextStyle(color: Color(0xFF04120A), fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _StepButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: 48,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: colors.border)),
+        child: Icon(icon, color: colors.text),
+      ),
+    );
+  }
 }
 
 /// Steps for the day: hardware pedometer total (while the app is open) plus a

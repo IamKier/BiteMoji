@@ -206,10 +206,16 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _syncFoods() async {
     final remote = await fetchRemoteFoods();
-    if (remote != null && remote.isNotEmpty) {
-      _foods = remote;
-      notifyListeners();
+    if (remote == null || remote.isEmpty) return;
+    // Merge rather than replace: the bundled list is the baseline (so locally
+    // added foods like the Filipino dishes never vanish when the remote table
+    // is a subset), and the remote overrides or adds entries by id.
+    final byId = {for (final f in kFoods) f.id: f};
+    for (final f in remote) {
+      byId[f.id] = f;
     }
+    _foods = byId.values.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    notifyListeners();
   }
 
   Future<void> _persist(String key, String value) async {
@@ -273,6 +279,13 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
 
   void removeEntry(String id) {
     _entries = _entries.where((e) => e.id != id).toList();
+    notifyListeners();
+    _persist(_kEntries, _entriesJson);
+  }
+
+  /// Replaces an entry (matched by id) with an edited version.
+  void updateEntry(Entry entry) {
+    _entries = [for (final e in _entries) e.id == entry.id ? entry : e];
     notifyListeners();
     _persist(_kEntries, _entriesJson);
   }
