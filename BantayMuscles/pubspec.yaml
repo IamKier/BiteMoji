@@ -1,32 +1,35 @@
 name: bantaymuscles
 description: BantayMuscles — calorie and macro tracker (Flutter build).
 publish_to: 'none'
-version: 1.4.0+7
+version: 1.5.0+8
 
 environment:
-  sdk: '>=3.4.0 <4.0.0'
+  sdk: '>=3.9.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   provider: ^6.1.2          # simple state management (ChangeNotifier)
   shared_preferences: ^2.3.2 # local persistence (like AsyncStorage)
   http: ^1.2.2              # Open Food Facts calls
-  supabase_flutter: ^2.8.0  # auth + per-user cloud sync
+  supabase_flutter: ^2.17.1 # auth + per-user cloud sync
   home_widget: ^0.9.0       # Android home-screen widget bridge
-  fl_chart: ^0.69.0         # progress charts / donut
   mobile_scanner: ^7.0.0    # barcode scanning (camera)
   pedometer: ^4.0.2         # hardware step counting
-  permission_handler: ^11.3.1 # runtime activity-recognition permission
-  package_info_plus: ^8.0.2 # current app version (for update check)
+  # Runtime activity-recognition + camera permission.
+  # Held at 12.x: 13.0.0's Android module pins `compileSdk = 37`, and API 37
+  # only ships as minor-versioned SDK packages (android-37.0, android-37.1) —
+  # there is no `android-37` for Gradle to resolve, so it can't build. Revisit
+  # once upstream targets a compileSdk that exists.
+  permission_handler: ^12.0.0
+  package_info_plus: ^10.2.1 # current app version (for update check)
   path_provider: ^2.1.4     # download location for the update APK
   open_filex: ^4.5.0        # launch the installer for a downloaded APK
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.1
 
 flutter:

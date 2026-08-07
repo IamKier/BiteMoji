@@ -15,9 +15,14 @@ enum SyncStatus { idle, syncing, synced, offline }
 /// Design: local-first. The device is always the working copy (so the app works
 /// offline and when signed out). When signed in, the full data snapshot
 /// (AppStore.exportData) is stored as one row per user in the `user_data`
-/// table. On sign-in we reconcile by timestamp (newer wins); on each local
-/// change we debounce and push. Row-level security keeps each user's row
-/// private — the shipped anon key can only touch its own user's row.
+/// table. Row-level security keeps each user's row private — the shipped anon
+/// key can only touch its own user's row.
+///
+/// On sign-in we *merge* rather than overwrite (see [AppStore.mergeData]).
+/// Timestamps only decide who wins a field both sides changed; rows only one
+/// side has are always kept. Picking a whole snapshot by timestamp used to
+/// discard everything the losing device had logged since it last synced.
+/// After a merge we push straight back, so the other device converges too.
 class SyncService extends ChangeNotifier {
   final AppStore store;
   final AuthController auth;
@@ -35,6 +40,7 @@ class SyncService extends ChangeNotifier {
   bool _applyingRemote = false;
   Timer? _debounce;
   String? _reconciledUserId;
+  int _lastSeenRevision = 0;
 
   SupabaseClient get _sb => Supabase.instance.client;
 
@@ -42,6 +48,7 @@ class SyncService extends ChangeNotifier {
   /// Call once after the store has hydrated.
   void start() {
     if (!auth.isConfigured) return;
+    _lastSeenRevision = store.dataRevision;
     auth.addListener(_onAuthChanged);
     store.addListener(_onStoreChanged);
     _onAuthChanged();
@@ -84,16 +91,18 @@ class SyncService extends ChangeNotifier {
       final cloudIsNewer = cloudUpdated != null &&
           (localChanged == null || cloudUpdated.isAfter(localChanged));
 
-      if (cloudIsNewer) {
-        _applyingRemote = true;
-        final data = row['data'];
-        store.importData(data is String ? data : jsonEncode(data));
-        _applyingRemote = false;
-        _lastSyncedAt = cloudUpdated;
-        _setStatus(SyncStatus.synced);
-      } else {
-        await _push(userId);
-      }
+      final data = row['data'];
+      _applyingRemote = true;
+      store.mergeData(
+        data is String ? data : jsonEncode(data),
+        remoteIsNewer: cloudIsNewer,
+      );
+      _applyingRemote = false;
+      _lastSeenRevision = store.dataRevision;
+
+      // The merged result is a superset of the cloud row whenever this device
+      // had anything the cloud lacked, so push it back unconditionally.
+      await _push(userId);
     } catch (_) {
       _applyingRemote = false;
       _setStatus(SyncStatus.offline);
@@ -102,6 +111,13 @@ class SyncService extends ChangeNotifier {
 
   void _onStoreChanged() {
     if (_applyingRemote) return; // don't echo a pull back up
+    // Only real data edits are worth a push. Changing day, theme, or a
+    // background catalog refresh all notify too, and treating those as edits
+    // used to bump the local timestamp — making a device that had merely been
+    // opened look "newer" than one that had actually logged food.
+    if (store.dataRevision == _lastSeenRevision) return;
+    _lastSeenRevision = store.dataRevision;
+
     final user = auth.user;
     if (user == null) return;
     unawaited(_markLocalChanged());

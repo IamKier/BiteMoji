@@ -12,6 +12,14 @@ class ChangelogEntry {
 
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '1.5.0',
+    changes: [
+      'Your saved foods (My Foods) are now included in backups and in cloud sync. Before this they were left out — restoring a backup, or signing in on a new phone, started you with an empty My Foods.',
+      'Signing in on a second phone no longer overwrites what the first one logged. The two are merged instead, so nothing you logged on either device is lost.',
+      'Deleting a meal or a saved food now syncs properly — it stays deleted instead of coming back from your other device.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.4.0',
     changes: [
       'Home-screen widget! Add it from your launcher (long-press home → Widgets → BantayMuscles) to see today\'s calories, macros and steps at a glance.',

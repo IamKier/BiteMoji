@@ -371,7 +371,7 @@ class _IngredientPickerScreenState extends State<_IngredientPickerScreen> {
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: results.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: colors.border),
+                separatorBuilder: (_, _) => Divider(height: 1, color: colors.border),
                 itemBuilder: (_, i) {
                   final f = results[i];
                   return ListTile(

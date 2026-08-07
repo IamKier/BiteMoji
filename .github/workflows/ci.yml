@@ -1,7 +1,7 @@
 name: CI
 
-# Runs static analysis and the test suite on every push/PR to main, so
-# regressions are caught before a release is cut.
+# Runs static analysis, the test suite, and a release build on every push/PR
+# to main, so regressions are caught before a release is cut.
 
 on:
   push:
@@ -19,20 +19,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The Android build needs a JDK; Gradle 9 and the app's compileOptions
+      # both target 17.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.7
           channel: stable
           cache: true
 
-      # These files are gitignored (they hold local secrets), so a fresh
-      # checkout lacks them and the code won't compile. Seed them from the
-      # committed templates — empty values just mean offline / AI-off.
-      - name: Seed local config from templates
-        run: |
-          cp -n lib/remote_config.example.dart lib/remote_config.dart
-          cp -n lib/ai_config.example.dart lib/ai_config.dart
+      # This file is gitignored (it holds local secrets), so a fresh checkout
+      # lacks it and the code won't compile. Seed it from the committed
+      # template — empty values just mean the app runs offline.
+      - name: Seed local config from template
+        run: cp -n lib/remote_config.example.dart lib/remote_config.dart
 
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+
+      # Analysis and tests both run on the host and never touch Gradle, the
+      # plugins' native code, or resource files — so an Android-only break
+      # (a bad manifest, a plugin needing a higher minSdk, a widget layout
+      # typo) used to surface only when a release was built by hand. Without
+      # android/key.properties the build falls back to debug signing, so this
+      # verifies compilation without needing the upload keystore.
+      - name: Build release APK
+        run: flutter build apk --release

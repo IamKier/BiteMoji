@@ -25,15 +25,34 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, double> _weights = {};
   List<Food> _foods = List.of(kFoods);
   List<Food> _customFoods = [];
+  Map<String, String> _deleted = {};
   String _today = toDateKey(DateTime.now());
   late String _selectedDate = _today;
   ThemeMode _themeMode = ThemeMode.system;
   bool _ready = false;
+  int _dataRevision = 0;
   Timer? _dayTimer;
 
   Profile get profile => _profile;
   bool get ready => _ready;
   String get selectedDate => _selectedDate;
+
+  /// Bumped only when data the user owns changes — entries, profile, steps,
+  /// weights, saved foods. Browsing days, flipping the theme, or a background
+  /// catalog refresh all notify listeners without touching this, so SyncService
+  /// can tell "the user logged something" apart from "the UI moved".
+  int get dataRevision => _dataRevision;
+
+  /// Ids of entries and saved foods the user deleted, with when (UTC ISO-8601).
+  /// Deletions have to travel too: without these a merge would just pull a
+  /// deleted row back from whichever device hadn't heard about it yet.
+  Map<String, String> get deleted => Map.unmodifiable(_deleted);
+
+  /// Notify for a change that belongs to the user's synced data set.
+  void _dataChanged() {
+    _dataRevision++;
+    notifyListeners();
+  }
 
   /// The day the app currently considers "today". Everything that needs the
   /// current date reads this rather than calling DateTime.now() itself, so the
@@ -68,23 +87,59 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
       searchFoods([..._customFoods, ..._foods], query);
 
   static const _kCustomFoods = 'bm.customfoods.v1';
+  static const _kDeleted = 'bm.deleted.v1';
+
+  /// How long a deletion is remembered. Long enough for a device that's been
+  /// offline for months to still learn about it; short enough that the list
+  /// can't grow forever.
+  static const _tombstoneTtl = Duration(days: 180);
 
   /// Saves (or updates, by id) a food the user entered. Prepended so the newest
   /// is first.
   void addCustomFood(Food food) {
     _customFoods = [food, ..._customFoods.where((f) => f.id != food.id)];
-    notifyListeners();
+    _revive(food.id); // re-adding beats an earlier delete
+    _dataChanged();
     _persistCustomFoods();
   }
 
   void removeCustomFood(String id) {
     _customFoods = _customFoods.where((f) => f.id != id).toList();
-    notifyListeners();
+    _tombstone(id);
+    _dataChanged();
     _persistCustomFoods();
   }
 
   void _persistCustomFoods() =>
       _persist(_kCustomFoods, jsonEncode(_customFoods.map((f) => f.toJson()).toList()));
+
+  /// Weights are keyed by date rather than by a generated id, so their
+  /// tombstones get a prefix to keep them out of the entry/food id space.
+  static String _weightKey(String date) => 'weight:$date';
+
+  /// Records that [id] was deleted, so a later merge doesn't bring it back.
+  void _tombstone(String id) {
+    _deleted = {..._deleted, id: DateTime.now().toUtc().toIso8601String()};
+    _persistDeleted();
+  }
+
+  /// Forgets a deletion — the row exists again and should sync as such.
+  void _revive(String id) {
+    if (!_deleted.containsKey(id)) return;
+    _deleted = {..._deleted}..remove(id);
+    _persistDeleted();
+  }
+
+  /// Drops tombstones past [_tombstoneTtl] so the list stays bounded.
+  Map<String, String> _prunedTombstones(Map<String, String> input) {
+    final cutoff = DateTime.now().toUtc().subtract(_tombstoneTtl);
+    return {
+      for (final e in input.entries)
+        if (DateTime.tryParse(e.value)?.isAfter(cutoff) ?? true) e.key: e.value,
+    };
+  }
+
+  void _persistDeleted() => _persist(_kDeleted, jsonEncode(_deleted));
 
   /// The distinct foods most recently logged, newest first — a shortcut for the
   /// things a user actually eats. Reconstructed from diary entries at their
@@ -196,6 +251,14 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
           .firstWhere((m) => m.name == raw, orElse: () => ThemeMode.system);
     });
 
+    _load(prefs, _kDeleted, (raw) {
+      final out = <String, String>{};
+      (jsonDecode(raw) as Map).forEach((k, v) {
+        if (k is String && v is String) out[k] = v;
+      });
+      _deleted = _prunedTombstones(out);
+    });
+
     _ready = true;
     notifyListeners();
 
@@ -273,32 +336,33 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
 
   void addEntry(Entry entry) {
     _entries = [..._entries, entry];
-    notifyListeners();
+    _dataChanged();
     _persist(_kEntries, _entriesJson);
   }
 
   void removeEntry(String id) {
     _entries = _entries.where((e) => e.id != id).toList();
-    notifyListeners();
+    _tombstone(id);
+    _dataChanged();
     _persist(_kEntries, _entriesJson);
   }
 
   /// Replaces an entry (matched by id) with an edited version.
   void updateEntry(Entry entry) {
     _entries = [for (final e in _entries) e.id == entry.id ? entry : e];
-    notifyListeners();
+    _dataChanged();
     _persist(_kEntries, _entriesJson);
   }
 
   void updateProfile(Profile profile) {
     _profile = profile;
-    notifyListeners();
+    _dataChanged();
     _persist(_kProfile, jsonEncode(profile.toJson()));
   }
 
   void setStepsForDate(String date, int steps) {
     _steps = {..._steps, date: steps < 0 ? 0 : steps};
-    notifyListeners();
+    _dataChanged();
     _persist(_kSteps, jsonEncode(_steps));
   }
 
@@ -307,7 +371,7 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
   void addStepsForDate(String date, int delta) {
     if (delta <= 0) return;
     _steps = {..._steps, date: (_steps[date] ?? 0) + delta};
-    notifyListeners();
+    _dataChanged();
     _persist(_kSteps, jsonEncode(_steps));
   }
 
@@ -323,7 +387,8 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
   void setWeightForDate(String date, double kg) {
     if (kg <= 0) return;
     _weights = {..._weights, date: (kg * 10).round() / 10};
-    notifyListeners();
+    _revive(_weightKey(date));
+    _dataChanged();
     _persist(_kWeights, jsonEncode(_weights));
 
     final latestKey = (_weights.keys.toList()..sort()).last;
@@ -333,7 +398,8 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
   void removeWeightForDate(String date) {
     if (!_weights.containsKey(date)) return;
     _weights = {..._weights}..remove(date);
-    notifyListeners();
+    _tombstone(_weightKey(date));
+    _dataChanged();
     _persist(_kWeights, jsonEncode(_weights));
   }
 
@@ -346,44 +412,171 @@ class AppStore extends ChangeNotifier with WidgetsBindingObserver {
 
   // --- Backup ---------------------------------------------------------------
 
-  /// A portable JSON snapshot of everything the user has entered.
+  /// A portable JSON snapshot of everything the user has entered. This is also
+  /// exactly what cloud sync stores, so anything the user can lose belongs in
+  /// here — saved foods included.
+  ///
+  /// Stays at `version: 1`: newer fields are optional, so an older build can
+  /// still read a snapshot written by this one (it just ignores what it doesn't
+  /// know), and this build reads older snapshots that lack them.
   String exportData() => jsonEncode({
         'version': 1,
         'exportedAt': DateTime.now().toIso8601String(),
         'profile': _profile.toJson(),
         'entries': _entries.map((e) => e.toJson()).toList(),
+        'customFoods': _customFoods.map((f) => f.toJson()).toList(),
         'steps': _steps,
         'weights': _weights,
+        'deleted': _deleted,
       });
 
   /// Replaces local data with a backup. Returns false if the payload is invalid.
+  /// This is the explicit "restore this file" path — it overwrites, by design.
+  /// Cloud sync uses [mergeData] instead.
   bool importData(String raw) {
-    Map<String, dynamic> parsed;
-    try {
-      parsed = jsonDecode(raw) as Map<String, dynamic>;
-    } catch (_) {
-      return false;
-    }
-    if (parsed['version'] != 1 || parsed['entries'] is! List) return false;
+    final parsed = _parseSnapshot(raw);
+    if (parsed == null) return false;
 
     try {
       _profile = Profile.fromJson(parsed['profile'] as Map<String, dynamic>);
       _entries = (parsed['entries'] as List)
           .map((j) => Entry.fromJson(j as Map<String, dynamic>))
           .toList();
-      _steps = (parsed['steps'] as Map? ?? {})
-          .map((k, v) => MapEntry(k as String, (v as num).toInt()));
-      _weights = (parsed['weights'] as Map? ?? {})
-          .map((k, v) => MapEntry(k as String, (v as num).toDouble()));
+      _steps = _stepsFrom(parsed['steps']);
+      _weights = _weightsFrom(parsed['weights']);
+      // Optional — absent in snapshots written before these were tracked.
+      _customFoods = _foodsFrom(parsed['customFoods']);
+      _deleted = _prunedTombstones(_deletedFrom(parsed['deleted']));
     } catch (_) {
       return false;
     }
 
-    notifyListeners();
+    _dataChanged();
+    _persistAll();
+    return true;
+  }
+
+  /// Folds a remote snapshot into the local one instead of replacing it.
+  ///
+  /// Used by cloud sync, where both sides may hold changes the other hasn't
+  /// seen: overwriting either way would throw away real logging. Rules:
+  ///
+  /// * entries and saved foods — union by id; on the same id, [remoteIsNewer]
+  ///   decides which version of the row survives.
+  /// * steps — the higher count for a day wins; a step total only ever grows,
+  ///   and taking the max can't lose steps either device counted.
+  /// * weights and profile — one value per day (or one profile), so the newer
+  ///   side wins.
+  /// * deletions — unioned, then applied last, so a row deleted on either
+  ///   device stays deleted rather than being resurrected by the other's copy.
+  ///
+  /// Returns false if the payload is unusable; the local data is untouched then.
+  bool mergeData(String raw, {required bool remoteIsNewer}) {
+    final parsed = _parseSnapshot(raw);
+    if (parsed == null) return false;
+
+    try {
+      final remoteEntries = [
+        for (final row in parsed['entries'] as List)
+          if (Entry.tryFromJson(row) case final Entry e) e,
+      ];
+      final remoteFoods = _foodsFrom(parsed['customFoods']);
+      final remoteSteps = _stepsFrom(parsed['steps']);
+      final remoteWeights = _weightsFrom(parsed['weights']);
+      final tombstones = _prunedTombstones({
+        ..._deletedFrom(parsed['deleted']),
+        ..._deleted,
+      });
+
+      final entries = {for (final e in _entries) e.id: e};
+      for (final e in remoteEntries) {
+        if (remoteIsNewer || !entries.containsKey(e.id)) entries[e.id] = e;
+      }
+
+      final foods = {for (final f in _customFoods) f.id: f};
+      for (final f in remoteFoods) {
+        if (remoteIsNewer || !foods.containsKey(f.id)) foods[f.id] = f;
+      }
+
+      final steps = {..._steps};
+      remoteSteps.forEach((date, count) {
+        final local = steps[date] ?? 0;
+        if (count > local) steps[date] = count;
+      });
+
+      final weights = {..._weights};
+      remoteWeights.forEach((date, kg) {
+        if (remoteIsNewer || !weights.containsKey(date)) weights[date] = kg;
+      });
+
+      // Deletions win over both copies, whichever side recorded them.
+      entries.removeWhere((id, _) => tombstones.containsKey(id));
+      foods.removeWhere((id, _) => tombstones.containsKey(id));
+      weights.removeWhere((date, _) => tombstones.containsKey(_weightKey(date)));
+
+      _entries = entries.values.toList();
+      // Saved foods are shown newest-first; ids sort by creation time.
+      _customFoods = foods.values.toList()..sort((a, b) => b.id.compareTo(a.id));
+      _steps = steps;
+      _weights = weights;
+      _deleted = tombstones;
+      if (remoteIsNewer && parsed['profile'] is Map<String, dynamic>) {
+        _profile = Profile.fromJson(parsed['profile'] as Map<String, dynamic>);
+      }
+    } catch (_) {
+      return false;
+    }
+
+    _dataChanged();
+    _persistAll();
+    return true;
+  }
+
+  /// Decodes a snapshot and checks the shape both entry points depend on.
+  Map<String, dynamic>? _parseSnapshot(String raw) {
+    try {
+      final parsed = jsonDecode(raw) as Map<String, dynamic>;
+      if (parsed['version'] != 1 || parsed['entries'] is! List) return null;
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Food> _foodsFrom(Object? raw) => raw is! List
+      ? const []
+      : [
+          for (final row in raw)
+            if (Food.tryFromJson(row) case final Food f) f,
+        ];
+
+  Map<String, int> _stepsFrom(Object? raw) => raw is! Map
+      ? {}
+      : {
+          for (final e in raw.entries)
+            if (e.key is String && e.value is num) e.key as String: (e.value as num).toInt(),
+        };
+
+  Map<String, double> _weightsFrom(Object? raw) => raw is! Map
+      ? {}
+      : {
+          for (final e in raw.entries)
+            if (e.key is String && e.value is num) e.key as String: (e.value as num).toDouble(),
+        };
+
+  Map<String, String> _deletedFrom(Object? raw) => raw is! Map
+      ? {}
+      : {
+          for (final e in raw.entries)
+            if (e.key is String && e.value is String) e.key as String: e.value as String,
+        };
+
+  void _persistAll() {
     _persist(_kProfile, jsonEncode(_profile.toJson()));
     _persist(_kEntries, _entriesJson);
     _persist(_kSteps, jsonEncode(_steps));
     _persist(_kWeights, jsonEncode(_weights));
-    return true;
+    _persistCustomFoods();
+    _persistDeleted();
   }
 }

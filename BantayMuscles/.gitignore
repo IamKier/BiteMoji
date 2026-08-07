@@ -38,8 +38,6 @@ migrate_working_dir/
 
 # Local secrets — real Supabase values live here (see remote_config.example.dart)
 /lib/remote_config.dart
-# Gemini API key for in-app AI logging (see ai_config.example.dart)
-/lib/ai_config.dart
 
 # Release signing — NEVER commit the keystore or its passwords. Back them up
 # somewhere safe: losing them means you can't ship updates to the same app.

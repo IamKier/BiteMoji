@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +14,34 @@ import 'package:bantaymuscles/store.dart';
 const _kEntries = 'bm.entries.v1';
 const _kProfile = 'bm.profile.v1';
 const _kWeights = 'bm.weights.v1';
+
+/// The marketing version from pubspec (`1.4.0` out of `version: 1.4.0+7`).
+/// Tests run with the package root as the working directory.
+String _pubspecVersion() {
+  final line = File('pubspec.yaml')
+      .readAsLinesSync()
+      .firstWhere((l) => l.startsWith('version:'));
+  return line.split(':')[1].trim().split('+').first;
+}
+
+/// A store hydrated from the given persisted values.
+Future<AppStore> _storeWith([Map<String, Object> prefs = const {}]) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues(prefs);
+  final store = AppStore();
+  await store.hydrate();
+  return store;
+}
+
+const _kFood = Food(
+  id: 'custom:1',
+  name: 'Lola adobo',
+  serving: '1 serving',
+  calories: 350,
+  protein: 28,
+  carbs: 8,
+  fat: 22,
+);
 
 Map<String, dynamic> _entryJson(String id, {int calories = 200}) => {
       'id': id,
@@ -124,10 +154,16 @@ void main() {
   });
 
   group('changelog', () {
-    test('has an entry matching the current pubspec version', () {
-      // The What's-new sheet only appears if the shipping version has notes.
-      final entry = changelogFor('1.1.0');
-      expect(entry, isNotNull);
+    test('has an entry for the version actually being shipped', () {
+      // The What's-new sheet only appears if the shipping version has notes, so
+      // read the real version out of pubspec rather than a hardcoded one — a
+      // literal here goes stale the moment a release is cut and stops catching
+      // the thing it exists to catch.
+      final version = _pubspecVersion();
+      final entry = changelogFor(version);
+      expect(entry, isNotNull,
+          reason: 'pubspec is at $version but lib/changelog.dart has no entry '
+              'for it — the "What\'s new" sheet would not appear.');
       expect(entry!.changes, isNotEmpty);
     });
 
@@ -212,6 +248,187 @@ void main() {
       store2.removeCustomFood('custom:1');
       expect(store2.customFoods, isEmpty);
       store2.dispose();
+    });
+  });
+
+  group('the backup snapshot covers everything the user owns', () {
+    // Regression: saved foods were persisted under their own key but left out
+    // of exportData, so they were in neither the backup file nor the cloud
+    // snapshot. Restoring a backup, or signing in on a new phone, silently
+    // dropped every food the user had entered by hand.
+    test('a saved food survives export → import', () async {
+      final store = await _storeWith();
+      store.addCustomFood(_kFood);
+      final backup = store.exportData();
+      store.dispose();
+
+      expect(jsonDecode(backup)['customFoods'], isNotEmpty);
+
+      final restored = await _storeWith();
+      expect(restored.importData(backup), isTrue);
+      expect(restored.customFoods.single.name, 'Lola adobo');
+      restored.dispose();
+    });
+
+    test('a snapshot written before saved foods were tracked still imports',
+        () async {
+      // Forward/backward compatibility is why the snapshot stays at version 1
+      // with optional fields — an old backup must not be rejected.
+      final legacy = jsonEncode({
+        'version': 1,
+        'profile': const Profile().toJson(),
+        'entries': [_entryJson('a')],
+        'steps': {'2026-07-25': 500},
+        'weights': {'2026-07-25': 70.0},
+      });
+      final store = await _storeWith();
+      expect(store.importData(legacy), isTrue);
+      expect(store.allEntries.single.id, 'a');
+      expect(store.customFoods, isEmpty);
+      store.dispose();
+    });
+
+    test('a corrupt payload leaves local data alone', () async {
+      final store = await _storeWith();
+      store.addEntry(Entry.tryFromJson(_entryJson('mine'))!);
+      expect(store.importData('{ not json'), isFalse);
+      expect(store.mergeData('{ not json', remoteIsNewer: true), isFalse);
+      expect(store.allEntries.single.id, 'mine');
+      store.dispose();
+    });
+  });
+
+  group('AppStore.mergeData (cloud sync reconciliation)', () {
+    /// A remote snapshot as the cloud would hold it.
+    String remote({
+      List<Map<String, dynamic>> entries = const [],
+      List<Map<String, dynamic>> customFoods = const [],
+      Map<String, int> steps = const {},
+      Map<String, double> weights = const {},
+      Map<String, String> deleted = const {},
+      Profile profile = const Profile(),
+    }) =>
+        jsonEncode({
+          'version': 1,
+          'profile': profile.toJson(),
+          'entries': entries,
+          'customFoods': customFoods,
+          'steps': steps,
+          'weights': weights,
+          'deleted': deleted,
+        });
+
+    // Regression: reconcile used to pick one whole snapshot by timestamp, so
+    // whichever device was "older" lost everything it had logged since its
+    // last sync — even though the two sets didn't overlap at all.
+    test('keeps rows only one side has, in both directions', () async {
+      final store = await _storeWith();
+      store.addEntry(Entry.tryFromJson(_entryJson('local'))!);
+
+      expect(
+        store.mergeData(remote(entries: [_entryJson('cloud')]), remoteIsNewer: true),
+        isTrue,
+      );
+
+      expect(store.allEntries.map((e) => e.id), containsAll(['local', 'cloud']));
+      store.dispose();
+    });
+
+    test('on the same row, the newer side wins', () async {
+      final store = await _storeWith();
+      store.addEntry(Entry.tryFromJson(_entryJson('e1', calories: 200))!);
+
+      store.mergeData(remote(entries: [_entryJson('e1', calories: 900)]),
+          remoteIsNewer: true);
+      expect(store.allEntries.single.calories, 900);
+
+      store.mergeData(remote(entries: [_entryJson('e1', calories: 111)]),
+          remoteIsNewer: false);
+      expect(store.allEntries.single.calories, 900, reason: 'stale remote must not win');
+      store.dispose();
+    });
+
+    test('saved foods merge too, and are not lost to the cloud copy', () async {
+      final store = await _storeWith();
+      store.addCustomFood(_kFood);
+
+      store.mergeData(
+        remote(customFoods: [
+          const Food(
+            id: 'custom:2', name: 'Tita sinigang', serving: '1 bowl',
+            calories: 180, protein: 12, carbs: 14, fat: 8,
+          ).toJson()
+        ]),
+        remoteIsNewer: true,
+      );
+
+      expect(store.customFoods.map((f) => f.id), containsAll(['custom:1', 'custom:2']));
+      store.dispose();
+    });
+
+    test('a deleted row is not resurrected by the other device', () async {
+      final store = await _storeWith();
+      final entry = Entry.tryFromJson(_entryJson('gone'))!;
+      store.addEntry(entry);
+      store.removeEntry('gone');
+      expect(store.deleted.containsKey('gone'), isTrue);
+
+      // The cloud still has it — it hasn't heard about the delete yet.
+      store.mergeData(remote(entries: [_entryJson('gone')]), remoteIsNewer: true);
+      expect(store.allEntries, isEmpty, reason: 'local delete must win');
+
+      // ...and the other way round: the cloud recorded the delete, we still hold it.
+      final other = await _storeWith();
+      other.addEntry(entry);
+      other.mergeData(
+        remote(deleted: {'gone': DateTime.now().toUtc().toIso8601String()}),
+        remoteIsNewer: false,
+      );
+      expect(other.allEntries, isEmpty, reason: 'remote delete must win too');
+      other.dispose();
+      store.dispose();
+    });
+
+    test('re-adding a deleted saved food beats the old tombstone', () async {
+      final store = await _storeWith();
+      store.addCustomFood(_kFood);
+      store.removeCustomFood('custom:1');
+      store.addCustomFood(_kFood);
+
+      store.mergeData(remote(), remoteIsNewer: true);
+      expect(store.customFoods.single.id, 'custom:1');
+      store.dispose();
+    });
+
+    test('steps take the higher count rather than overwriting', () async {
+      final store = await _storeWith();
+      store.setStepsForDate('2026-07-25', 8000);
+
+      store.mergeData(remote(steps: {'2026-07-25': 3000, '2026-07-26': 500}),
+          remoteIsNewer: true);
+
+      expect(store.stepsForDate('2026-07-25'), 8000);
+      expect(store.stepsForDate('2026-07-26'), 500);
+      store.dispose();
+    });
+  });
+
+  group('AppStore.dataRevision', () {
+    // Sync used to push (and stamp a "local changed" time) on every notify,
+    // so a device that had merely been opened and scrolled looked newer than
+    // one that had actually logged food — and then won the timestamp compare.
+    test('moves only for changes that belong in the snapshot', () async {
+      final store = await _storeWith();
+      final start = store.dataRevision;
+
+      store.setSelectedDate('2026-07-01');
+      store.shiftDate(-1);
+      store.setThemeMode(ThemeMode.dark);
+      expect(store.dataRevision, start, reason: 'UI state is not user data');
+
+      store.addEntry(Entry.tryFromJson(_entryJson('a'))!);
+      expect(store.dataRevision, greaterThan(start));
+      store.dispose();
     });
   });
 

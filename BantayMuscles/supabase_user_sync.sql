@@ -1,7 +1,10 @@
 -- Per-user cloud sync for BantayMuscles.
 -- Run once in the Supabase SQL Editor. Idempotent — safe to re-run.
 --
--- Stores one JSON snapshot per user (profile + diary + steps + weights).
+-- Stores one JSON snapshot per user — whatever AppStore.exportData() writes
+-- (profile, diary, steps, weights, saved foods, and deletion tombstones).
+-- It's a single jsonb column, so adding fields to the snapshot needs no
+-- migration here.
 -- Row-level security is what keeps each user's data private, since the app
 -- ships a publishable key. Without these policies, data would be exposed.
 
