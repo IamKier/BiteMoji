@@ -1,4 +1,4 @@
-# BantayMuscles — Flutter app
+# BiteMoji — Flutter app
 
 Calorie and macro tracker aimed at Filipino food. Android is the shipping
 target; the code also builds for web and Windows, which is handy for fast UI
@@ -85,7 +85,7 @@ resources, so an Android-only break would otherwise show up only at release time
 3. Write `RELEASE_NOTES_vX.Y.Z.md`.
 4. `flutter build apk --release`
 5. Publish it as a GitHub release on
-   [IamKier/BantayMuscles](https://github.com/IamKier/BantayMuscles/releases).
+   [IamKier/BiteMoji](https://github.com/IamKier/BiteMoji/releases).
    Installed apps check that endpoint at startup and offer the update in place.
 
 Release signing reads `android/key.properties` (gitignored). Without it the

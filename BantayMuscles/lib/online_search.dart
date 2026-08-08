@@ -19,7 +19,7 @@ import 'models/nutrition.dart';
 const _endpoint = 'https://search.openfoodfacts.org/search';
 
 // Open Food Facts requires a descriptive User-Agent and blocks generic ones.
-const _userAgent = 'BantayMuscles/1.0 (https://github.com/IamKier/BantayMuscles)';
+const _userAgent = 'BiteMoji/1.0 (https://github.com/IamKier/BiteMoji)';
 
 const _timeout = Duration(seconds: 12);
 

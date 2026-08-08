@@ -16,7 +16,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// owner/repo whose Releases feed the updater. Must be public.
-const String kGithubRepo = 'IamKier/BantayMuscles';
+const String kGithubRepo = 'IamKier/BiteMoji';
 
 class UpdateInfo {
   final String version; // tag without a leading "v", e.g. "1.0.1+3"
@@ -109,7 +109,7 @@ Future<UpdateInfo?> checkForUpdate() async {
 Future<bool> downloadAndInstall(UpdateInfo update, {void Function(double)? onProgress}) async {
   try {
     final dir = await getExternalStorageDirectory() ?? await getTemporaryDirectory();
-    final file = File('${dir.path}/BantayMuscles-${update.tagName}.apk');
+    final file = File('${dir.path}/BiteMoji-${update.tagName}.apk');
 
     final client = http.Client();
     try {
