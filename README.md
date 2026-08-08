@@ -1,4 +1,4 @@
-# BantayMuscles
+# BiteMoji
 
 Calorie and macro tracker for Filipino food — Android-first, built with Flutter.
 
@@ -30,5 +30,5 @@ release signing, and how updates ship.
   adds cloud backup and carries your data to a new phone.
 
 Updates are distributed as APKs on
-[GitHub Releases](https://github.com/IamKier/BantayMuscles/releases) — the app
+[GitHub Releases](https://github.com/IamKier/BiteMoji/releases) — the app
 checks for a newer one at startup and can install it in place.
