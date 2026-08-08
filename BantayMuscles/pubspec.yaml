@@ -35,7 +35,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-# App icon — the BantayMuscles "BM" logo shared with the Expo app.
+# App icon — the "BM" logo (predates the BiteMoji rename; see README).
 # Regenerate with: dart run flutter_launcher_icons
 flutter_launcher_icons:
   image_path: "assets/icon/bm-icon.png"

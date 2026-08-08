@@ -13,7 +13,7 @@ String q(String s) => "'${s.replaceAll("'", "''")}'";
 
 void main() {
   final b = StringBuffer();
-  b.writeln('-- BantayMuscles food catalog seed / sync (${kFoods.length} foods).');
+  b.writeln('-- BiteMoji food catalog seed / sync (${kFoods.length} foods).');
   b.writeln('-- Idempotent: safe to run repeatedly.');
   b.writeln('insert into public.foods (id, name, serving, calories, protein, carbs, fat) values');
   b.writeln([
