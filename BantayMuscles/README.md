@@ -4,6 +4,24 @@ Calorie and macro tracker aimed at Filipino food. Android is the shipping
 target; the code also builds for web and Windows, which is handy for fast UI
 iteration but neither is distributed.
 
+## Features
+
+- **Log food, however you have it** — a bundled catalog of ~100 foods (heavy on
+  Filipino dishes), typo-tolerant / accent-folding search, a barcode scanner and
+  online lookup via Open Food Facts, and **Quick Add** for anything with no
+  entry. Save one-offs to **My Foods**, or build a dish from parts in the
+  **recipe builder**. A **portion guide** helps eyeball amounts.
+- **Track what matters** — calories and protein/carbs/fat against goals derived
+  from your profile (Mifflin–St Jeor BMR/TDEE), hardware **step counting** that
+  credits your daily budget, and **body weight** with a trend chart.
+- **Edit freely** — tap a logged meal to change servings or move it; long-press a
+  saved food to edit or remove it.
+- **Yours, everywhere (optional)** — sign in for per-user **cloud sync**; the app
+  is fully usable offline and signed out.
+- **Home-screen widget** — today's calories, macros and steps at a glance, with a
+  quick-add tap. Resizable.
+- **Self-updating** — sideloaded builds check GitHub Releases and update in place.
+
 ## Getting started
 
 ```bash
