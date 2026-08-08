@@ -78,7 +78,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
             Text(
               widget.update.notes.isNotEmpty
                   ? widget.update.notes
-                  : 'A new version of BantayMuscles is ready to install.',
+                  : 'A new version of BiteMoji is ready to install.',
               style: TextStyle(color: colors.textSecondary),
             ),
             if (sizeMb != null) ...[

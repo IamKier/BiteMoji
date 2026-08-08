@@ -434,7 +434,7 @@ class _AboutCardState extends State<_AboutCard> {
         children: [
           const Text('About', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text('BantayMuscles${_version.isNotEmpty ? '  ·  v$_version' : ''}',
+          Text('BiteMoji${_version.isNotEmpty ? '  ·  v$_version' : ''}',
               style: TextStyle(fontSize: 13, color: colors.textSecondary)),
           const SizedBox(height: 12),
           SizedBox(

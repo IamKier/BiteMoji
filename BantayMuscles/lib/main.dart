@@ -46,19 +46,19 @@ Future<void> main() async {
         ChangeNotifierProvider<AuthController>.value(value: auth),
         ChangeNotifierProvider<SyncService>.value(value: sync),
       ],
-      child: const BantayMusclesApp(),
+      child: const BiteMojiApp(),
     ),
   );
 }
 
-class BantayMusclesApp extends StatelessWidget {
-  const BantayMusclesApp({super.key});
+class BiteMojiApp extends StatelessWidget {
+  const BiteMojiApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
     return MaterialApp(
-      title: 'BantayMuscles',
+      title: 'BiteMoji',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
@@ -75,8 +75,7 @@ class _LoadingScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFE4E2DD),
       body: Center(
-        child: Text('BM',
-            style: TextStyle(fontSize: 72, fontWeight: FontWeight.w900, color: Colors.blue.shade800)),
+        child: const Text('😋', style: TextStyle(fontSize: 72)),
       ),
     );
   }

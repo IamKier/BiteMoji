@@ -10,7 +10,7 @@
     <!-- In-app self-update: install the downloaded release APK. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
-        android:label="BantayMuscles"
+        android:label="BiteMoji"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -44,6 +44,7 @@
         <!-- Home-screen widget: today's calories / macros / steps + quick add. -->
         <receiver
             android:name=".BmWidgetProvider"
+            android:label="@string/app_widget_label"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
