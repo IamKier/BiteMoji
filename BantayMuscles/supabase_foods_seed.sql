@@ -1,4 +1,4 @@
--- BantayMuscles food catalog seed / sync (105 foods).
+-- BiteMoji food catalog seed / sync (105 foods).
 -- Idempotent: safe to run repeatedly.
 insert into public.foods (id, name, serving, calories, protein, carbs, fat) values
   ('rice-white', 'White rice, cooked', '1 cup (158g)', 205, 4, 45, 0),

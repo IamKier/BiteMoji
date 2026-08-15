@@ -1,4 +1,4 @@
--- Per-user cloud sync for BantayMuscles.
+-- Per-user cloud sync for BiteMoji.
 -- Run once in the Supabase SQL Editor. Idempotent — safe to re-run.
 --
 -- Stores one JSON snapshot per user — whatever AppStore.exportData() writes

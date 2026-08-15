@@ -1,4 +1,4 @@
-## BantayMuscles 1.2.0
+## BiteMoji 1.2.0
 
 Making it easy to log food that has no official database entry.
 

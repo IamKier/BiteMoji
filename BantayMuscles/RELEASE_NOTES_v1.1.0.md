@@ -1,4 +1,4 @@
-## BantayMuscles 1.1.0
+## BiteMoji 1.1.0
 
 ### ⚠️ Updating from 1.0.0? Save your data first
 This release is signed with a new key, so it installs as a fresh app — a direct
@@ -6,7 +6,7 @@ in-app update will fail with "App not installed". To keep your data:
 
 1. **Before updating:** open **Profile → Backup → Export** (copies all your data).
 2. Paste it somewhere safe (a note or message to yourself).
-3. **Uninstall** the old BantayMuscles, then install this version.
+3. **Uninstall** the old app, then install this version.
 4. Open **Profile → Backup → Import** to restore everything.
 
 New installs: just install and go.

@@ -1,7 +1,7 @@
-name: bantaymuscles
+name: bitemoji
 description: BiteMoji — calorie and macro tracker (Flutter build).
 publish_to: 'none'
-version: 1.5.0+8
+version: 1.6.0+9
 
 environment:
   sdk: '>=3.9.0 <4.0.0'

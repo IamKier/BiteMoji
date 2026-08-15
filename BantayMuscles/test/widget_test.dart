@@ -5,10 +5,10 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:bantaymuscles/changelog.dart';
-import 'package:bantaymuscles/models/nutrition.dart';
-import 'package:bantaymuscles/search.dart';
-import 'package:bantaymuscles/store.dart';
+import 'package:bitemoji/changelog.dart';
+import 'package:bitemoji/models/nutrition.dart';
+import 'package:bitemoji/search.dart';
+import 'package:bitemoji/store.dart';
 
 // Storage keys are a persistence contract — kept in sync with AppStore.
 const _kEntries = 'bm.entries.v1';

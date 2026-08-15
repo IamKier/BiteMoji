@@ -1,4 +1,4 @@
-package com.bantaymuscles.bantaymuscles
+package com.bitemoji.bitemoji
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -70,7 +70,7 @@ class BmWidgetProvider : HomeWidgetProvider() {
         val pending = HomeWidgetLaunchIntent.getActivity(
             context,
             MainActivity::class.java,
-            Uri.parse("bantaymuscles://add")
+            Uri.parse("bitemoji://add")
         )
         views.setOnClickPendingIntent(R.id.widget_root, pending)
         views.setOnClickPendingIntent(R.id.add_button, pending)

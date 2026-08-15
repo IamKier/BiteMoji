@@ -1,4 +1,4 @@
-## BantayMuscles 1.3.0
+## BiteMoji 1.3.0
 
 **Accounts & sync (optional)**
 - Sign in to back up your diary, profile, steps and weights — and carry them to a new phone. It's opt-in under **Profile → Sync across devices**; the app still works fully offline and signed out.

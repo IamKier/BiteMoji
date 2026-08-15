@@ -1,4 +1,4 @@
-## BantayMuscles 1.5.0
+## BiteMoji 1.5.0
 
 **Your data is safer — three fixes to backup and sync**
 

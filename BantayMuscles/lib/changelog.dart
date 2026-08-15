@@ -12,6 +12,14 @@ class ChangelogEntry {
 
 const List<ChangelogEntry> kChangelog = [
   ChangelogEntry(
+    version: '1.6.0',
+    changes: [
+      'The app is now called BiteMoji — same app, same food list, new name.',
+      'Because the rename changes how Android identifies the app, this version installs alongside the old BantayMuscles instead of replacing it. Your old data stays in the old app until you bring it across.',
+      'To bring your data over: open the old app, Profile → Backup → Export, copy the text, then paste it here under Profile → Backup → Import. Once everything looks right, uninstall the old app.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.5.0',
     changes: [
       'Your saved foods (My Foods) are now included in backups and in cloud sync. Before this they were left out — restoring a backup, or signing in on a new phone, started you with an empty My Foods.',

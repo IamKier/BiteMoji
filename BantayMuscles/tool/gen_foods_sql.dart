@@ -7,7 +7,7 @@
 // Paste the output into the Supabase SQL Editor. Safe to re-run: rows are
 // matched by id and updated in place.
 
-import 'package:bantaymuscles/foods.dart';
+import 'package:bitemoji/foods.dart';
 
 String q(String s) => "'${s.replaceAll("'", "''")}'";
 

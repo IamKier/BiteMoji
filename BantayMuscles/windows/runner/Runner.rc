@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.bantaymuscles" "\0"
-            VALUE "FileDescription", "bantaymuscles" "\0"
+            VALUE "CompanyName", "com.bitemoji" "\0"
+            VALUE "FileDescription", "bitemoji" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "bantaymuscles" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.bantaymuscles. All rights reserved." "\0"
-            VALUE "OriginalFilename", "bantaymuscles.exe" "\0"
-            VALUE "ProductName", "bantaymuscles" "\0"
+            VALUE "InternalName", "bitemoji" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.bitemoji. All rights reserved." "\0"
+            VALUE "OriginalFilename", "bitemoji.exe" "\0"
+            VALUE "ProductName", "bitemoji" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
